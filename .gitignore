@@ -1,0 +1,17 @@
+node_modules/
+
+# Gradle / Android build output. The shipped APK is committed under dist/
+# instead, because a build directory is not a deliverable.
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+*.iml
+*.keystore
+*.jks
+local.properties
+
+.DS_Store
+Thumbs.db

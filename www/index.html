@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- viewport-fit=cover lets the layout reach under the notch; the safe-area
+     insets in styles.css then keep content clear of it. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- `only light` rather than `light`: it is the documented opt-out from Chrome
+     Android's Auto Dark Theme, which would otherwise re-map the severity palette
+     that was measured against a white ground. Matches color-scheme in styles.css. -->
+<meta name="color-scheme" content="only light">
+<meta name="theme-color" content="#ffffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="FUSE">
+<meta name="description" content="FUSE, a multi-sensor fire detection console. Smoke, flame, heat and combustible-gas readings are fused per zone before any alert is raised.">
+<title>FUSE · Fire Detection Console</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="assets/css/styles.css">
+
+<link rel="icon" type="image/png" href="assets/img/fuse-symbol.png">
+<link rel="apple-touch-icon" href="assets/img/fuse-symbol.png">
+
+<!-- Resolved by assets/js/backend.js once it knows whether Firebase is reachable. -->
+<script>window.FUSE_READY = new Promise(function (r) { window.__fuseReady = r; });</script>
+
+<!-- The ghost screen has to paint before styles.css and the fonts arrive, so its
+     rules live here rather than in the design system. It is removed by the first
+     real render; on a slow line it is what the operator looks at meanwhile. -->
+<style>
+  :root { --gh-bg:#F7F8FA; --gh-card:#fff; --gh-line:#E5E7EB; --gh-bone:#E9ECF1; }
+  html,body { margin:0; }
+  body { background:var(--gh-bg); font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; }
+  #boot {
+    position:fixed; inset:0; z-index:9999; display:grid; grid-template-columns:232px 1fr;
+    background:var(--gh-bg);
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #boot[hidden] { display:none; }
+  .gh-side { background:var(--gh-card); border-right:1px solid var(--gh-line); padding:20px 16px; }
+  .gh-brand { display:flex; align-items:center; gap:10px; margin-bottom:28px; padding:0 4px; }
+  .gh-brand img { width:28px; height:28px; object-fit:contain; }
+  .gh-main { display:flex; flex-direction:column; min-width:0; }
+  .gh-top { background:var(--gh-card); border-bottom:1px solid var(--gh-line); padding:14px 24px; display:flex; align-items:center; gap:16px; }
+  .gh-body { padding:20px 24px; display:flex; flex-direction:column; gap:16px; }
+  .gh-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+  .gh-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .gh-card { background:var(--gh-card); border:1px solid var(--gh-line); border-radius:10px; padding:16px; }
+  .bone { background:var(--gh-bone); border-radius:6px; position:relative; overflow:hidden; }
+  .bone::after {
+    content:""; position:absolute; inset:0; transform:translateX(-100%);
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.72),transparent);
+    animation:gh-shimmer 1.5s ease-in-out infinite;
+  }
+  @keyframes gh-shimmer { 100% { transform:translateX(100%); } }
+  @media (prefers-reduced-motion:reduce) { .bone::after { animation:none; } }
+  @media (max-width:960px) { #boot { grid-template-columns:1fr } .gh-side { display:none } .gh-kpis,.gh-cards { grid-template-columns:1fr } }
+  .gh-status { margin-top:18px; font-size:12px; color:#667085; display:flex; align-items:center; gap:8px; }
+  .gh-spin { width:13px; height:13px; border:2px solid #E5E7EB; border-top-color:#416FAF; border-radius:50%; animation:gh-spin .7s linear infinite; }
+  @keyframes gh-spin { to { transform:rotate(360deg) } }
+  @media (prefers-reduced-motion:reduce) { .gh-spin { animation-duration:2.4s } }
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<!-- Ghost screen. Mirrors the real shell's geometry so the page does not jump
+     when the console replaces it. -->
+<div id="boot" role="status" aria-live="polite" aria-label="Loading the FUSE console">
+  <div class="gh-side">
+    <div class="gh-brand">
+      <img src="assets/img/fuse-symbol.png" alt="">
+      <span class="bone" style="width:76px;height:15px"></span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <span class="bone" style="height:15px;width:82%"></span>
+      <span class="bone" style="height:15px;width:64%"></span>
+      <span class="bone" style="height:15px;width:73%"></span>
+      <span class="bone" style="height:15px;width:58%"></span>
+      <span class="bone" style="height:15px;width:68%"></span>
+      <span class="bone" style="height:15px;width:52%"></span>
+    </div>
+  </div>
+  <div class="gh-main">
+    <div class="gh-top">
+      <span class="bone" style="height:22px;width:210px"></span>
+      <span style="flex:1"></span>
+      <span class="bone" style="height:32px;width:230px;border-radius:20px"></span>
+      <span class="bone" style="height:30px;width:30px;border-radius:50%"></span>
+    </div>
+    <div class="gh-body">
+      <div class="gh-kpis">
+        <div class="gh-card"><span class="bone" style="display:block;height:13px;width:60%"></span><span class="bone" style="display:block;height:26px;width:42%;margin-top:12px"></span></div>
+        <div class="gh-card"><span class="bone" style="display:block;height:13px;width:66%"></span><span class="bone" style="display:block;height:26px;width:38%;margin-top:12px"></span></div>
+        <div class="gh-card"><span class="bone" style="display:block;height:13px;width:54%"></span><span class="bone" style="display:block;height:26px;width:46%;margin-top:12px"></span></div>
+        <div class="gh-card"><span class="bone" style="display:block;height:13px;width:44%"></span><span class="bone" style="display:block;height:26px;width:56%;margin-top:12px"></span></div>
+      </div>
+      <div class="gh-cards">
+        <div class="gh-card" style="height:196px"><span class="bone" style="display:block;height:14px;width:48%"></span><span class="bone" style="display:block;height:58px;margin-top:16px"></span><span class="bone" style="display:block;height:58px;margin-top:10px"></span></div>
+        <div class="gh-card" style="height:196px"><span class="bone" style="display:block;height:14px;width:52%"></span><span class="bone" style="display:block;height:13px;margin-top:18px"></span><span class="bone" style="display:block;height:13px;margin-top:12px;width:88%"></span><span class="bone" style="display:block;height:13px;margin-top:12px;width:94%"></span><span class="bone" style="display:block;height:13px;margin-top:12px;width:76%"></span></div>
+      </div>
+      <p class="gh-status"><span class="gh-spin"></span><span id="boot-msg">Connecting to the sensor network…</span></p>
+    </div>
+  </div>
+</div>
+
+<div id="root"></div>
+<div id="overlay"></div>
+<div id="toasts" class="toast-root" role="status" aria-live="polite" aria-atomic="false"></div>
+
+<noscript>
+  <div style="padding:48px;max-width:52ch;margin:0 auto">
+    <h1 style="font-size:20px;font-weight:600">FUSE console</h1>
+    <p style="margin-top:12px;color:#667085;line-height:1.6">
+      This console renders live sensor telemetry and needs JavaScript enabled.
+    </p>
+  </div>
+</noscript>
+
+<script src="assets/js/firebase-config.js"></script>
+<script src="assets/js/backend.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

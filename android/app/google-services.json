@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "290049464757",
+    "firebase_url": "https://spendwise-dec03-default-rtdb.firebaseio.com",
+    "project_id": "spendwise-dec03",
+    "storage_bucket": "spendwise-dec03.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:290049464757:android:e5638d39685ac65feda1fc",
+        "android_client_info": {
+          "package_name": "com.research2.fuse"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "290049464757-rre2lams4ihnnqmgdi0h6a3kdotomhdu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC96yxtivbIFBK1Vm1wSydR8Kn6-npkgZA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "290049464757-rre2lams4ihnnqmgdi0h6a3kdotomhdu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
