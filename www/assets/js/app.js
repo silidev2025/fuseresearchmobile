@@ -755,7 +755,12 @@ function viewSidebar(vms, offZones, unacked, failed) {
 
   var health = [
     { k: 'Nodes online',   v: (S.zones.length - offZones.length) + '/' + S.zones.length, cls: offZones.length ? 'sev-2' : 'sev-0' },
-    { k: 'Controller',     v: 'OK', cls: 'sev-0' },
+    /* No "Controller: OK" row. It was the string 'OK' in green, unconditionally,
+       with nothing behind it - there is no controller health signal anywhere in
+       this codebase. Same fabrication as the Uptime constant that used to sit in
+       the KPI row, and the same rule applies: do not put a metric on a live
+       screen that nothing measures. Nodes online, immediately above, is the real
+       answer to "is anything working". */
     { k: 'Dispatch queue', v: S.notifs.filter(isOutstanding).length + ' outstanding', cls: '' },
     { k: 'Failed sends',   v: String(failed), cls: failed ? 'sev-3' : '' }
   ];
@@ -875,16 +880,25 @@ function viewUserMenu() {
         ? '<p class="sub" style="margin-top:7px;font-size:11px;line-height:1.45">' +
             (S.profile.profileProblem === 'denied'
               ? 'Your role could not be read: the Firestore rules refused it. Publish firestore.rules, then reload.'
-              : 'No <code>users/' + esc(S.profile.uid) + '</code> document, so you are a viewer. Create it with <code>role: "admin"</code>.') +
+              /* Same two-audience problem as the NOT ENROLLED card, and the same
+                 answer. This used to say "Create it with role: admin", which is
+                 right for an operator and dangerous for the node account - the
+                 credential that lives in ESP32 firmware, which is exactly the
+                 account most likely to be signed in here while someone checks
+                 the app works. Enrolling it would hand firmware on a wall read
+                 access to the residents' contact details. */
+              : 'Not enrolled: there is no <code>users/' + esc(S.profile.uid) + '</code> document. ' +
+                'An operator account needs one, created by an admin. ' +
+                'A node account is not meant to have one - sign out and use your operator account.') +
           '</p>'
         : '') +
     '</div>' +
     '<div class="menu__list">' +
-      /* Demo only. In live mode the role is whatever users/{uid}.role says and
-         the rules re-check it on every write, so a client-side toggle would
-         change the label and nothing else: it announced "now acting as admin"
-         while every admin action stayed refused. A control that lies about
-         permissions is worse than no control. */
+      /* There is no role toggle here, deliberately. The role is whatever
+         users/{uid}.role says, and the rules re-check it server-side on every
+         write, so a client-side switch would change the label and nothing else:
+         it announced "now acting as admin" while every admin action stayed
+         refused. A control that lies about permissions is worse than none. */
       '<button class="menu__item" role="menuitem" data-act="nav" data-arg="settings">Settings</button>' +
       '<button class="menu__item menu__item--danger" role="menuitem" data-act="sign-out">Sign out</button>' +
     '</div>' +
@@ -2401,6 +2415,39 @@ var toasts = document.getElementById('toasts');
 var lastShell = '';
 var resetScroll = false;
 
+/* --- Android back gesture -------------------------------------------------
+   Back is the reflex for dismissing a sheet on Android, and in the packaged app
+   there is no browser chrome to absorb it: without this, back closed the entire
+   console instead of the dialog sitting on top of it, discarding a half-typed
+   contact with it. The WebView's back maps to history.back(), so one sentinel
+   entry per overlay opening is enough, and it costs the web build nothing.
+
+   The depth flag keeps push and pop paired. Closing through the UI pops the
+   sentinel; the resulting popstate finds no overlay open and does nothing, so
+   the two paths cannot loop into each other. */
+function overlayOpen() { return !!(S && (S.confirm || S.cform || S.menu)); }
+
+var overlaySentinel = 0;
+
+function syncOverlayHistory() {
+  var open = overlayOpen();
+  if (open && !overlaySentinel) {
+    overlaySentinel = 1;
+    try { history.pushState({ fuseOverlay: 1 }, ''); } catch (e) { overlaySentinel = 0; }
+  } else if (!open && overlaySentinel) {
+    overlaySentinel = 0;
+    try { history.back(); } catch (e) {}
+  }
+}
+
+window.addEventListener('popstate', function () {
+  if (!overlayOpen()) return;
+  /* The entry is already gone, so do not try to pop it again. */
+  overlaySentinel = 0;
+  S.confirm = null; S.cform = null; S.menu = false;
+  render();
+});
+
 function render() {
   /* One clock, and this is where it advances.
 
@@ -2428,7 +2475,8 @@ function render() {
      below 960px the document element is the scroller - without this a drag on
      the scrim scrolls the page behind the dialog, and you cancel out somewhere
      other than where you started. */
-  document.documentElement.style.overflow = (S.confirm || S.cform || S.menu) ? 'hidden' : '';
+  document.documentElement.style.overflow = overlayOpen() ? 'hidden' : '';
+  syncOverlayHistory();
   morph(toasts, viewToast());
 
   /* Restore hover readout on any chart the pointer is still over. */

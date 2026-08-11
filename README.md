@@ -130,6 +130,13 @@ Inherited from the web console, and unchanged by packaging it:
   raster and does not survive being scaled to the 432px an adaptive icon wants.
   Replacing it properly needs the original vector.
 
+## The nodes
+
+The ESP32 firmware, wiring, bill of materials and calibration notes live in
+ in the [web repository](https://github.com/manciafrancisdave/fuseresearch/tree/main/hardware).
+This app does not talk to the nodes directly - it reads what they publish to
+Realtime Database, like the web console does.
+
 ## Not life-safety equipment
 
 This is a monitoring aid. Local sounders must fire from the node itself, without
