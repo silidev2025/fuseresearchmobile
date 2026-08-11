@@ -1408,6 +1408,10 @@ pre { font-family: var(--sans); }
      to auto too, which clipped the :focus-visible ring on every nav button. */
   .nav {
     flex-direction: row; flex-wrap: nowrap; padding: var(--s-1) 0; flex: 1; min-width: 0;
+    /* Explicit, not inherited-by-accident. The row mixes items that carry a
+       badge with items that do not, and leaving the default to resolve on its
+       own is how a nav row ends up looking stepped. Centre them. */
+    align-items: center;
     overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain; scroll-padding-inline: var(--s-4);
     -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
@@ -1554,7 +1558,33 @@ pre { font-family: var(--sans); }
      which is the one thing worth its height on a phone. Controls in it (the
      Monitoring tabs, Add contact) are untouched. */
   .toolbar__hint { display: none; }
-  .toolbar { justify-content: flex-end; }
+
+  /* One row, one height, on every section.
+
+     .toolbar__hint is hidden just above, so Dashboard, Alerts, Dispatch and
+     Settings collapse to nothing but the live dot and the clock - a single row.
+     Monitoring puts .tabs in that same slot and Teams puts a button there, and
+     neither of those is a hint, so neither was hidden: with flex-wrap:wrap they
+     spilled onto a SECOND row and their content began ~24px lower than every
+     other section. The same header, a different height, depending which page
+     you were looking at.
+
+     nowrap keeps it to one row. The left group is allowed to shrink and scroll
+     rather than wrap, the way the nav row already does. min-height is the 44px
+     touch floor plus this block's 10px of padding, so a section carrying a
+     control in its toolbar ends up exactly as tall as one carrying none. */
+  .toolbar {
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    gap: var(--s-3);
+    min-height: 64px;
+  }
+  .toolbar > .row {
+    flex: 1 1 auto; min-width: 0; flex-wrap: nowrap;
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .toolbar > .row::-webkit-scrollbar { display: none; }
+  .toolbar__meta { flex: 0 0 auto; }
   .account__name { display: none; }      /* the avatar is enough at this width */
   .account { padding: 4px; }
 

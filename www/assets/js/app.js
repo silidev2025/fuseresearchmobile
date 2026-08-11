@@ -1029,7 +1029,10 @@ function viewToolbar(sel) {
   } else if (S.section === 'dispatch') {
     left = '<span class="sub toolbar__hint">Outgoing alerts and their delivery state.</span>';
   } else {
-    left = '<span class="sub toolbar__hint">Changes apply to the running simulation immediately.</span>';
+    /* Was "Changes apply to the running simulation immediately" - left over
+       from demo mode, which no longer exists. Thresholds really are per-browser;
+       saying so is the honest version of that sentence. */
+    left = '<span class="sub toolbar__hint">Threshold edits apply to this browser only, on the next telemetry tick.</span>';
   }
 
   return '' +
