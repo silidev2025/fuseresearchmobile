@@ -17,9 +17,15 @@
 <meta name="description" content="FUSE, a multi-sensor fire detection console. Smoke, flame, heat and combustible-gas readings are fused per zone before any alert is raised.">
 <title>FUSE · Fire Detection Console</title>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<!-- Inter ships with the app rather than coming from fonts.googleapis.com. The
+     whole design system is built on it, and a CDN failure used to drop the
+     console onto a system sans - different metrics, and .num loses the tabular
+     figures that keep a changing reading in its column. The Android build runs
+     from local assets, so a remote typeface would have been the one thing on
+     screen that needed the network to look right.
+     Preloaded because the @font-face lives inside styles.css, so the browser
+     would not otherwise discover it until the stylesheet had parsed. -->
+<link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/css/styles.css">
 
 <link rel="icon" type="image/png" href="assets/img/fuse-symbol.png">
