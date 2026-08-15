@@ -1,22 +1,3 @@
-/* Generates the Android launcher icons and splash screens from the FUSE brand
-   marks, so the app wears the same identity as the console inside it.
-
-   Run from the project root:  node tools/gen-assets.js
-
-   Two things worth knowing before changing this.
-
-   The mark is a 131x157 raster (the web repo's CLAUDE.md says it will not hold
-   up above ~60px and to swap in the vector if it ever turns up). That sounds
-   fatal for a 432px adaptive foreground, but it is not: an adaptive icon only
-   shows its inner 66 of 108dp, so the mark occupies roughly half the canvas and
-   the largest upscale here is about 1.5x. Lanczos handles that. If the source
-   is ever replaced with a vector, delete the upscale guard below and re-run.
-
-   The background is white because that is --surface, the plane the mark was
-   drawn for. CLAUDE.md says not to put the mark on a coloured square, and this
-   is not one - an adaptive icon is required to have a background layer, and
-   white is the absence of a plate rather than the addition of one. */
-
 const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
@@ -27,13 +8,8 @@ const LOCKUP = 'www/assets/img/fuse-logo.png';
 const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
 const CLEAR = { r: 0, g: 0, b: 0, alpha: 0 };
 
-/* Adaptive foreground canvases. The safe zone is 66/108 = 61% of the canvas, so
-   the mark is fitted to 52% and keeps a margin off the mask edge at every
-   shape a launcher might apply. */
 const FOREGROUND = { mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 };
 
-/* Legacy square/round icons, used below API 26. No safe zone, so the mark can
-   sit larger. */
 const LEGACY = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
 
 const SPLASH_PORT = { mdpi: [320, 480], hdpi: [480, 800], xhdpi: [720, 1280], xxhdpi: [960, 1600], xxxhdpi: [1280, 1920] };
@@ -80,8 +56,6 @@ function write(dir, name, buf) {
     out.push(write(`mipmap-${dpi}`, 'ic_launcher_round.png', await circleMasked(size, sq)));
   }
 
-  /* The lockup, not the bare mark: a splash has room for the wordmark and the
-     console's own boot screen leads with the same lockup. */
   for (const [dpi, [w, h]] of Object.entries(SPLASH_PORT)) {
     out.push(write(`drawable-port-${dpi}`, 'splash.png', await canvas(w, h, WHITE, LOCKUP, Math.round(w * 0.46))));
   }

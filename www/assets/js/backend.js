@@ -1,20 +1,3 @@
-/* ==========================================================================
-   FUSE - backend adapter
-   --------------------------------------------------------------------------
-   One implementation: Firebase. There is no simulator and no demo fallback.
-
-   There used to be one, and the argument for it was that a site showing nothing
-   because a CDN is slow is worse than a site showing simulated data and saying
-   so. That reasoning belonged to a build with no project attached. It is the
-   wrong trade for a fire console wired to a real building: an operator glancing
-   at a screen has no way to tell fabricated readings from measured ones, and the
-   consequence of getting that wrong is not a bad demo.
-
-   So when Firebase cannot be reached, this returns an adapter that fails every
-   subscription immediately with the reason. app.js already renders that
-   honestly - feedFailed() retires the skeleton and names the feed that could not
-   be read. Silence is reported as silence.
-   ========================================================================== */
 (function () {
 'use strict';
 
@@ -28,8 +11,6 @@ function bootMsg(text) {
   if (el) el.textContent = text;
 }
 
-/* A slow line must not hang the ghost screen forever. Whichever settles first
-   wins: the SDK, or the clock. */
 function withTimeout(promise, ms, label) {
   return Promise.race([
     promise,
@@ -39,15 +20,11 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
-/* Firebase is unreachable or misconfigured. Every read reports the reason
-   instead of resolving empty, because an empty feed and an unreachable one look
-   identical on screen and mean completely different things. Every write is
-   refused rather than silently accepted into a void. */
 function downBackend(reason) {
   var err = new Error(reason || 'Firebase could not be reached.');
 
   function deadSub(cb, onErr) {
-    /* Asynchronous so the caller has finished wiring up before it hears back. */
+
     setTimeout(function () { if (onErr) onErr(err); }, 0);
     return function () {};
   }
@@ -57,7 +34,7 @@ function downBackend(reason) {
     mode: 'firebase',
     down: true,
     reason: err.message,
-    /* No session can be resolved, so the console lands on sign-in and says why. */
+
     onAuth: function (cb) { setTimeout(function () { cb(null); }, 0); return function () {}; },
     signIn: deadWrite,
     signInWithGoogle: deadWrite,
@@ -87,33 +64,24 @@ async function firebaseBackend() {
   var auth = authMod.getAuth(app);
   var rtdb = dbMod.getDatabase(app);
 
-  /* Keep the console usable through a dropped connection; Firestore replays the
-     writes when it comes back. The multi-tab manager matters here because an
-     operations console is exactly the thing someone leaves open on two screens,
-     and the old enableIndexedDbPersistence() refused the second tab. */
   var fs;
   try {
     fs = fsMod.initializeFirestore(app, {
       localCache: fsMod.persistentLocalCache({ tabManager: fsMod.persistentMultipleTabManager() })
     });
   } catch (e) {
-    /* Private browsing, an unsupported browser, or Firestore already started. */
+
     fs = fsMod.getFirestore(app);
   }
 
   var col = function (name) { return fsMod.collection(fs, name); };
 
-  /* The role is read from the user's own document, never from the client. A
-     viewer who edits their own profile in devtools still cannot write, because the
-     rules check this same document server-side. */
   async function profileOf(u) {
     if (!u) return null;
     var snap = null, readErr = null;
     try { snap = await fsMod.getDoc(fsMod.doc(fs, 'users', u.uid)); } catch (e) { readErr = e; }
     var d = (snap && snap.exists()) ? snap.data() : {};
-    /* Silently defaulting to viewer hides the two reasons it happens, which are
-       very different problems: the rules refused the read, or the document was
-       never created. Both land you in a locked console, so both get named. */
+
     var problem = readErr ? 'denied' : (snap && snap.exists() ? null : 'missing');
     return {
       uid: u.uid,
@@ -165,12 +133,6 @@ async function firebaseBackend() {
 
     signOut: function () { return authMod.signOut(auth); },
 
-    /* ---- realtime reads ---- */
-
-    /* Every subscription takes an error callback. A listener that is refused
-       must say so: without this a denied read leaves the section on skeletons
-       forever, which reads as "still loading" when it actually means "you are
-       not allowed to see this". */
     onZones: function (cb, onErr) {
       var path = CFG.telemetryPath || 'zones';
       return dbMod.onValue(dbMod.ref(rtdb, path), function (snap) {
@@ -236,15 +198,10 @@ async function firebaseBackend() {
       }, function (err) { if (onErr) onErr(err); });
     },
 
-    /* ---- writes. Every one of these is also gated by the rules files. ---- */
-
     ackEvent: function (id, by) {
       return fsMod.updateDoc(fsMod.doc(fs, 'events', id), { acked: true, by: by, ackAt: Date.now() });
     },
-    /* No pushEvent. The client cannot append to the audit trail - events are
-       written by functions/index.js through the Admin SDK, and firestore.rules
-       now says `allow create: if false` on that collection. A method here would
-       be a method that always fails. */
+
     saveContact: function (c) {
       var body = {
         name: c.name, role: c.role, phone: c.phone, email: c.email,
@@ -257,16 +214,12 @@ async function firebaseBackend() {
       return fsMod.updateDoc(fsMod.doc(fs, 'dispatches', id), { status: 'sent', ts: Date.now() });
     },
 
-    /* Overrides are commands to the node, so they go to RTDB where the ESP32 is
-       already listening - not to Firestore. */
     setZoneOverride: function (zoneId, patch) {
       var path = (CFG.telemetryPath || 'zones') + '/' + zoneId;
       return dbMod.update(dbMod.ref(rtdb, path), patch);
     }
   };
 }
-
-/* ---- boot ---------------------------------------------------------------- */
 
 (async function () {
   var api;
@@ -276,8 +229,7 @@ async function firebaseBackend() {
     try {
       api = await firebaseBackend();
     } catch (err) {
-      /* Offline, blocked CDN, bad config. Say so loudly and keep saying so -
-         this is not a condition to paper over with plausible-looking numbers. */
+
       console.error('[FUSE] Firebase unavailable:', err && err.message);
       bootMsg('Cannot reach Firebase.');
       api = downBackend((err && err.message) || 'Firebase could not be reached.');

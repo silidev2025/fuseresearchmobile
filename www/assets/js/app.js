@@ -1,30 +1,11 @@
-﻿/* ==========================================================================
-   FUSE - Multi-Sensor Fire Detection Console
-   --------------------------------------------------------------------------
-   Self-contained. No build step, no dependencies.
-
-   LIVE ONLY. There is no simulator and no demo mode. This console shows what the
-   building's nodes actually report, or it says plainly that it cannot reach
-   them. A fire console that invents plausible readings when the backend is down
-   is worse than one that goes dark, because the invented readings look real and
-   an operator has no way to tell.
-   ========================================================================== */
 (function () {
 'use strict';
 
-/* ---------------------------------------------------------------- config -- */
-
-/* The console's own clock, not the fleet's. Every node picks its own publish
-   cadence; this is only how often the screen re-ages heartbeats and repaints. */
 var TICK_MS = 1000;
 
-/* How long a node may go quiet before it is held at OFFLINE rather than trusted.
-   Read at call time - firebase-config.js owns the value. */
 function heartbeatTimeout() {
   return (window.FUSE_CONFIG && window.FUSE_CONFIG.heartbeatTimeoutMs) || 60000;
 }
-
-/* ------------------------------------------------------------- constants -- */
 
 var SEV = [
   { key: 'NORMAL',   cls: 'sev-0' },
@@ -34,15 +15,6 @@ var SEV = [
 ];
 var OFF = { key: 'OFFLINE', cls: 'sev-off' };
 
-/* Dispatch delivery states. Module-level because this map was duplicated
-   verbatim in viewDashboard and viewNotifs, which is precisely how it came to
-   disagree with what the server writes.
-
-   'queued' is sev-1, not sev-0, and that is the whole point: functions/index.js
-   raises a dispatch but nothing has actually left the system until a gateway
-   says so. Marking it green would be recording our own optimism as a delivery
-   receipt. statusOf() never returns undefined - an unrecognised status must
-   render as unknown, not throw inside a view and take render() down with it. */
 var STATUS = {
   sent:    { label: 'SENT',    cls: 'sev-0' },
   queued:  { label: 'QUEUED',  cls: 'sev-1' },
@@ -53,12 +25,8 @@ function statusOf(s) {
   return STATUS[s] || { label: String(s || 'UNKNOWN').toUpperCase(), cls: 'sev-off' };
 }
 
-/* A dispatch that has been raised but not delivered. Counters that ignore these
-   make a dispatch which never sends invisible. */
 function isOutstanding(n) { return n.status === 'queued' || n.status === 'pending'; }
 
-/* Three thresholds per sensor, ascending. Editable from Settings, so nothing may
-   read a copy of these at module load - always index TH at call time. */
 var TH = { temp: [36, 48, 65], gas: [1100, 1800, 2600], smoke: [5, 10, 18], co: [50, 120, 300] };
 var TH_DEFAULT = JSON.parse(JSON.stringify(TH));
 
@@ -79,8 +47,6 @@ var SENSOR_NAMES = {
   gas:   'Combustible gas (MQ-2)',
   co:    'Carbon monoxide (MQ-7)'
 };
-
-/* ----------------------------------------------------------------- utils -- */
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -113,27 +79,17 @@ function rng(seed) {
 }
 function sevOf(level) { return level < 0 ? OFF : SEV[level]; }
 
-/* Severity carries a shape AND a symbol as well as a colour, so it never reads
-   on hue alone - the red/green pair is indistinguishable to a dichromat and the
-   levels co-occur on screen. Each glyph is one filled path whose symbol is
-   punched out with fill-rule="evenodd", so the pill's own tint shows through and
-   the mark needs no second colour.
-
-   circle+tick · triangle+! · diamond+! · octagon+! · ring+dash
-   The octagon is deliberately not a second triangle: CRITICAL must not read as a
-   heavier CAUTION at a glance. */
 var SEV_GLYPH = [
-  /* 0 NORMAL - disc with a tick knocked out */
+
   'M8 1A7 7 0 1 0 8 15A7 7 0 1 0 8 1ZM11.7 6.02 6.96 10.76 4.66 8.46 3.5 9.62l3.46 3.46 5.9-5.9z',
-  /* 1 CAUTION - triangle */
+
   'M8 1.15 15.35 14.3H0.65ZM7.1 5.5h1.8v4.3H7.1ZM7.1 10.85h1.8v1.8H7.1Z',
-  /* 2 WARNING - diamond */
+
   'M8 0.7 15.3 8 8 15.3 0.7 8ZM7.1 4.5h1.8v4.6H7.1ZM7.1 10.15h1.8v1.8H7.1Z',
-  /* 3 CRITICAL - octagon */
+
   'M4.9 0.7h6.2L15.3 4.9v6.2L11.1 15.3H4.9L0.7 11.1V4.9ZM7.1 4.2h1.8v5H7.1ZM7.1 10.35h1.8v1.8H7.1Z'
 ];
-/* -1 OFFLINE - ring with a dash. The dash sits wholly inside the ring's hole, so
-   evenodd flips it back to solid. */
+
 var SEV_GLYPH_OFF = 'M8 1A7 7 0 1 0 8 15A7 7 0 1 0 8 1ZM8 3.6A4.4 4.4 0 1 1 8 12.4A4.4 4.4 0 1 1 8 3.6ZM4.8 7.1h6.4v1.8H4.8Z';
 
 function sevMark(level, size) {
@@ -148,16 +104,12 @@ function sevBadge(level, size) {
   return '<span class="pill ' + sv.cls + '">' + sevMark(level, size || 13) + sv.key + '</span>';
 }
 
-/* The reviewed state is a state, not a severity, so it gets a bare tick rather
-   than a pill - nothing to acknowledge means nothing to click. */
 function reviewedMark() {
   return '<svg class="sev-mark" width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">' +
     '<path fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"' +
     ' d="M2.8 8.6 6.3 12.1 13.2 4.4"/></svg>';
 }
 
-/* The topbar search is one field scoping whichever section is open, so every
-   list filters through here rather than growing a search box of its own. */
 function matches(haystack) {
   var q = S.filters.q.trim().toLowerCase();
   return !q || String(haystack).toLowerCase().indexOf(q) >= 0;
@@ -167,63 +119,40 @@ function emptyRow(cols, msg) {
   return '<tr><td colspan="' + cols + '" class="muted">' + msg + '</td></tr>';
 }
 
-/* "Nothing here" and "nothing matched what you typed" are different facts, and
-   showing the filter message over an empty collection sends the reader looking
-   for a search box they never used. `total` is the size before filtering. */
 function emptyMsg(total, empty, filtered) {
   return total === 0 ? empty : filtered;
 }
-
-/* ------------------------------------------------------------------ state -- */
 
 var S = null;
 var timer = null;
 var toastTimer = null;
 
-/* The backend adapter, resolved at boot. Either the Firebase implementation or
-   the simulator - app code never branches on which. */
 var FUSE = null;
 var subs = [];
 
-/* The console starts empty and stays empty until the backend says otherwise.
-
-   Nothing in here is placeholder data, and that is the point. A section whose
-   feed has not delivered yet renders as a skeleton; a section whose feed was
-   REFUSED renders as an error naming the feed and the rules file to publish.
-   "No events" and "events have not arrived" must never look the same, which is
-   why S.live tracks each feed separately instead of one global loading flag. */
 function initialState() {
   var now = Date.now();
   return {
     now: now, tick: 0, lastTick: now,
     loggedIn: false,
     loginId: '', loginPass: '',
-    /* status: 'checking' while the backend resolves the session, then 'out' or
-       'in'. busy holds which sign-in method is mid-flight so its button alone
-       shows a spinner. */
+
     auth: { status: 'checking', busy: null, error: null },
     profile: null,
-    /* Which live subscriptions have delivered a first snapshot. Anything still
-       false renders as a skeleton rather than as an empty list. */
+
     live: { zones: false, events: false, contacts: false, dispatches: false },
-    /* Keyed by feed name when a subscription is refused or fails. */
+
     feedError: {},
-    /* The last payload each live feed delivered. Writes are optimistic, and a
-       refused write changes nothing on the server, so no corrective snapshot
-       ever arrives: without this the screen keeps showing an acknowledgement or
-       a contact edit that did not happen. */
+
     snap: { zones: null, events: null, contacts: null, dispatches: null },
     section: 'dashboard', monTab: 'zones', selected: null,
     zones: [], events: [], notifs: [], contacts: [],
-    /* No zone is selected until a snapshot names one - there is no Z-03 to
-       default to before the fleet has reported. */
+
     chartZone: null, range: '6h',
     filters: { q: '', sev: 'ALL', zone: 'ALL', ack: 'ALL' },
     confirm: null, cform: null, toast: null, menu: false
   };
 }
-
-/* ------------------------------------------------------- fusion engine ---- */
 
 function lvlOf(v, th) { var l = 0; for (var i = 0; i < th.length; i++) { if (v > th[i]) l = i + 1; } return l; }
 
@@ -276,15 +205,6 @@ function readingSummary(r, c) {
   return p.join(' · ');
 }
 
-/* Readings arrive from the nodes, so the tick's only job is to age heartbeats
-   and re-classify - it must never invent a value.
-
-   Severity transitions are written by a Cloud Function, not here. Every open
-   console would otherwise race to append the same transition, giving one
-   duplicate event per operator watching. See functions/index.js. */
-/* The newest heartbeat in the fleet. Freshness has to come from the nodes: a
-   local timer would tick along happily while every node was silent, which is
-   the exact condition the live/stale indicator exists to catch. */
 function freshestSeen() {
   var newest = 0;
   S.zones.forEach(function (z) { if (z.lastSeen > newest) newest = z.lastSeen; });
@@ -294,29 +214,22 @@ function freshestSeen() {
 function liveTick(now) {
   var timeout = heartbeatTimeout();
   S.zones.forEach(function (z) {
-    /* lastSeen 0 means the node has NEVER reported, which is a different fault
-       from one that has stopped. Both are offline; only one has an age. */
+
     z.online = z.lastSeen > 0 && (now - z.lastSeen) < timeout;
     z.level = z.online ? classify(z.r).level : -1;
   });
 }
 
-/* One second, every second. No readings are generated here - the fleet decides
-   what is true and this only re-ages and repaints it. */
 function beat() {
-  /* render() owns S.now - see the note there. Passing the same instant into
-     liveTick keeps the heartbeat ages and the online flags on one reading. */
+
   liveTick(Date.now());
   render();
 }
 
-/* -------------------------------------------------------------- history --- */
-
 function series(zone, sensor, n, rangeKey) {
   var rand = rng(hash(zone.id + sensor + rangeKey));
   var cur = sensor === 'flame' ? (zone.r.flame ? 1 : 0) : zone.r[sensor];
-  /* A live zone has no simulation target to ramp toward, so its own current
-     reading anchors the synthetic backfill. */
+
   var baseVal = sensor === 'flame' ? 0 : (zone.t ? zone.t[sensor] : zone.r[sensor]);
   var calm = ({ temp: 24, gas: 520, smoke: 4.5, co: 6 })[sensor] || 0;
   var rise = Math.max(0, baseVal - calm);
@@ -345,14 +258,6 @@ function linePath(vals, min, max, w, h) {
   }).join(' ');
 }
 
-/* -------------------------------------------------------------- actions --- */
-
-/* The profile - including the role - comes from the user's own Firestore
-   document, read server-side by the rules on every write. There is no
-   client-side identity any more: no profile means no session.
-
-   ANON exists only so a render that races auth resolution has the right shape
-   to read from; it is never a signed-in user. */
 var ANON = { uid: '', email: '', name: '', roleLabel: '', role: 'viewer', cls: 'sev-1' };
 function user() { return S.profile || ANON; }
 function isAdmin() { return user().role === 'admin'; }
@@ -372,9 +277,6 @@ function denied(what) {
   toast('PERMISSION DENIED', what, 'sev-1');
 }
 
-/* Writes go through the backend when there is one. The optimistic local mutation
-   stays either way: the Firestore listener will overwrite it with the server's
-   version a moment later, and until then the click feels instant. */
 function ack(id) {
   var u = user();
   S.events.forEach(function (e) {
@@ -386,7 +288,6 @@ function ack(id) {
   toast('ACKNOWLEDGED', 'Event marked reviewed by ' + u.name + '. Recorded in the audit trail.', 'sev-0');
 }
 
-/* Put a feed back to the last thing the server actually said. */
 function revertFeed(key) {
   var s = S.snap[key];
   if (!s) return;
@@ -400,13 +301,6 @@ function revertFeed(key) {
   render();
 }
 
-/* A rejected write is almost always the rules refusing a role, so say that
-   rather than surfacing a raw Firebase error code.
-
-   `revertKey` matters as much as the message. Writes are optimistic, and a
-   refusal changes nothing on the server, so no corrective snapshot follows: the
-   screen would keep showing an acknowledgement, contact edit or discharged
-   actuator that never happened. On an audit trail that is not a cosmetic bug. */
 function writeFailed(what, err, revertKey) {
   if (revertKey) revertFeed(revertKey);
   var msg = (err && (err.code === 'permission-denied' || /permission/i.test(err.message || '')))
@@ -425,8 +319,6 @@ function logAction(z, what) {
 
 function zoneById(id) { return S.zones.filter(function (z) { return z.id === id; })[0]; }
 
-/* Confirmation dialogs are described by (kind, arg) rather than a captured
-   closure, so the dialog survives a re-render without holding stale state. */
 function confirmSpec(kind, arg) {
   var u = user();
   var z = zoneById(arg);
@@ -468,8 +360,6 @@ function confirmSpec(kind, arg) {
   return null;
 }
 
-/* An override is a command to the node, so in live mode it is written to the
-   device path the ESP32 is already subscribed to. */
 function pushOverride(zoneId, patch, what) {
   if (FUSE.mode !== 'firebase') return;
   FUSE.setZoneOverride(zoneId, patch).catch(function (err) { writeFailed(what, err, 'zones'); });
@@ -527,8 +417,6 @@ function saveContact() {
     cf.name + ' will be notified for ' + cf.scope + ' at ' + cf.min + ' and above via ' + cf.channel + '.', 'sev-0');
 }
 
-/* ------------------------------------------------------------- view model -- */
-
 function zoneVM(z, now) {
   var off = !z.online;
   var level = off ? -1 : z.level;
@@ -543,17 +431,13 @@ function zoneVM(z, now) {
     alert: !off && level >= 1,
     camLabel: off ? 'NO SIGNAL' : 'CAM ' + z.id.slice(2) + ' · ' + hmOf(z.lastSeen),
     camState: off ? 'STALE' : 'LIVE',
-    /* A node that has never published has lastSeen 0, and measuring "ago" from
-       the epoch reported a heartbeat lost 20674 days ago. Never reported and
-       stopped reporting are different faults and read differently. */
+
     seen: !z.lastSeen ? 'NO HEARTBEAT YET'
       : off ? 'HEARTBEAT LOST · ' + rel(z.lastSeen, now)
       : 'last seen ' + rel(z.lastSeen, now),
     act: off ? 'NODE UNREACHABLE' : 'FAN ' + fan + '% · MIST ' + mist + '% · VALVE ' + valve
   };
 }
-
-/* ----------------------------------------------------------------- views -- */
 
 var GOOGLE_G =
   '<svg viewBox="0 0 18 18" aria-hidden="true">' +
@@ -565,9 +449,7 @@ var GOOGLE_G =
 
 function viewLogin() {
   var busy = S.auth.busy;
-  /* Default google to false. The client cannot ask which providers a project has
-     enabled, so an unenabled one only fails after the user has already clicked
-     it - the safe default is to offer less, not more. */
+
   var providers = (window.FUSE_CONFIG && window.FUSE_CONFIG.providers) || { password: true, google: false };
 
   return '' +
@@ -599,7 +481,6 @@ function viewLogin() {
   '</div>';
 }
 
-/* Real sign-in. Email + password and/or Google, whichever the project enables. */
 function viewRealSignIn(busy, providers) {
   return '' +
   (providers.password
@@ -627,14 +508,10 @@ function viewRealSignIn(busy, providers) {
     : '');
 }
 
-/* ---- ghost loading ------------------------------------------------------- */
-
 function skel(cls, style) {
   return '<span class="skel ' + (cls || 'skel--text') + '"' + (style ? ' style="' + style + '"' : '') + '></span>';
 }
 
-/* Shown while auth resolves or the first snapshot is still in flight. Mirrors
-   the dashboard's geometry so nothing jumps when the data lands. */
 function viewSectionSkeleton() {
   var card = function (inner, h) {
     return '<section class="card"' + (h ? ' style="height:' + h + 'px"' : '') + '><div class="card__bd">' + inner + '</div></section>';
@@ -672,8 +549,6 @@ function viewApp() {
   var unacked = S.events.filter(function (e) { return !e.acked; }).length;
   var failed = S.notifs.filter(function (n) { return n.status === 'failed'; }).length;
 
-  /* The banner is the console's emergency channel - it belongs above the fold
-     on every section except Settings, which is never an incident surface. */
   var showBanner = S.section !== 'settings';
 
   return '' +
@@ -690,8 +565,6 @@ function viewApp() {
     '</div>';
 }
 
-/* Nav glyphs. Stroked paths only - the CSS sets fill/stroke so one rule themes
-   the whole set and an icon never carries colour of its own. */
 var ICONS = {
   dashboard:  '<rect x="2.5" y="2.5" width="5.5" height="5.5" rx="1.2"/><rect x="10" y="2.5" width="5.5" height="5.5" rx="1.2"/><rect x="2.5" y="10" width="5.5" height="5.5" rx="1.2"/><rect x="10" y="10" width="5.5" height="5.5" rx="1.2"/>',
   monitoring: '<polyline points="2,10 5,10 7,4.5 10.5,13.5 12.5,10 16,10"/>',
@@ -712,8 +585,6 @@ function icon(name, cls) {
   return '<svg class="' + (cls || 'nav__icon') + '" viewBox="0 0 18 18" aria-hidden="true">' + ICONS[name] + '</svg>';
 }
 
-/* Section registry - nav order, page titles and which view renders each.
-   One source of truth so the nav, the topbar title and the router cannot drift. */
 var SECTIONS = [
   { key: 'dashboard',  label: 'Dashboard',  icon: 'dashboard' },
   { key: 'monitoring', label: 'Monitoring', icon: 'monitoring' },
@@ -723,18 +594,6 @@ var SECTIONS = [
   { key: 'settings',   label: 'Settings',   icon: 'settings' }
 ];
 
-/* A badge is a claim about the building, so it may only print a number the
-   console actually knows.
-
-   Teams showed String(S.contacts.length) unconditionally, so a contacts read the
-   rules refused rendered as a confident "0" - indistinguishable from a genuinely
-   empty dispatch list. That is the same fault as announcing "all zones normal"
-   over a fleet nothing is watching, just smaller: an absence of information
-   presented as information.
-
-   Refused feed gets "!", because it is a fault an operator should chase. A feed
-   that simply has not delivered yet gets nothing - the section behind it is
-   already drawing a skeleton, and a badge is not the place to say "loading". */
 function badgeFor(feed, n, cls, showZero) {
   if (S.feedError[feed]) return { n: '!', cls: 'sev-3' };
   if (!S.live[feed]) return { n: '', cls: '' };
@@ -755,12 +614,7 @@ function viewSidebar(vms, offZones, unacked, failed) {
 
   var health = [
     { k: 'Nodes online',   v: (S.zones.length - offZones.length) + '/' + S.zones.length, cls: offZones.length ? 'sev-2' : 'sev-0' },
-    /* No "Controller: OK" row. It was the string 'OK' in green, unconditionally,
-       with nothing behind it - there is no controller health signal anywhere in
-       this codebase. Same fabrication as the Uptime constant that used to sit in
-       the KPI row, and the same rule applies: do not put a metric on a live
-       screen that nothing measures. Nodes online, immediately above, is the real
-       answer to "is anything working". */
+
     { k: 'Dispatch queue', v: S.notifs.filter(isOutstanding).length + ' outstanding', cls: '' },
     { k: 'Failed sends',   v: String(failed), cls: failed ? 'sev-3' : '' }
   ];
@@ -781,8 +635,7 @@ function viewSidebar(vms, offZones, unacked, failed) {
           (S.section === n.key ? ' aria-current="page"' : '') + '>' +
           icon(n.icon) +
           '<span class="nav__label">' + n.label + '</span>' +
-          /* "!" is a fault marker, not a count, so it needs a name of its own -
-             otherwise the button announces "Alerts, exclamation mark". */
+
           (b.n
             ? '<span class="nav__badge ' + b.cls + '"' +
               (b.n === '!' ? ' title="This feed could not be read" aria-label="feed could not be read"' : '') +
@@ -801,8 +654,6 @@ function viewSidebar(vms, offZones, unacked, failed) {
   '</div>';
 }
 
-/* Page titles live next to the section registry rather than inside the topbar,
-   because the sub-title depends on live counts the topbar does not compute. */
 function pageTitle(sel, unacked, failed) {
   if (S.section === 'monitoring') {
     if (sel) return ['Zone detail', sel.z.id + ' · ' + sel.z.name + ' · ' + sel.z.floor];
@@ -831,18 +682,14 @@ function viewTopbar(sel, unacked) {
       '<h1 class="h-page truncate">' + esc(t[0]) + '</h1>' +
       '<p class="topbar__sub truncate">' + esc(t[1]) + '</p>' +
     '</div>' +
-    /* Order is alerts, account, then search at the far right. Search was between
-       the title and the bell, which squeezed the banner headline on a narrow
-       screen for the control an operator reaches for least often. */
+
     '<div class="topbar__tools">' +
       '<button class="iconbtn" data-act="nav" data-arg="alerts" aria-label="' +
         (unacked ? unacked + ' alerts awaiting review' : 'Alerts') + '">' +
         icon('bell', 'nav__icon') +
         (unacked ? '<span class="iconbtn__dot"></span>' : '') +
       '</button>' +
-      /* An explicit label, because .account__name is display:none below 768px
-         and without this the button's accessible name collapses to two
-         initials. */
+
       '<button class="account ' + (S.profile && S.profile.profileProblem ? 'sev-2' : u.cls) + '" data-act="user-menu"' +
         ' aria-haspopup="menu" aria-controls="account-menu"' +
         ' aria-label="Account: ' + esc(u.name) + ' · ' + esc(u.roleLabel) + '"' +
@@ -865,28 +712,18 @@ function viewUserMenu() {
   if (!S.menu) return '';
   var u = user();
   return '' +
-  /* Below 960px .menu is a bottom sheet, and a sheet needs something behind it:
-     without a catcher the page under it stays tappable, and the outside-tap
-     dismissal has no surface to land on. It carries no data-act, so the bare
-     page handler closes the menu. */
+
   '<div class="menu-catch" data-catch="1"></div>' +
   '<div class="menu" id="account-menu" role="menu" data-stop="1">' +
     '<div class="menu__hd">' +
       '<p style="font-size:13px;font-weight:600">' + esc(u.name) + '</p>' +
       '<p class="label label--xs ' + u.cls + '" style="color:var(--sev-ink);margin-top:3px">' + esc(u.roleLabel) + '</p>' +
-      /* Landing as a viewer when you expected admin has exactly two causes, and
-         guessing between them costs more than printing both. */
+
       (S.profile && S.profile.profileProblem
         ? '<p class="sub" style="margin-top:7px;font-size:11px;line-height:1.45">' +
             (S.profile.profileProblem === 'denied'
               ? 'Your role could not be read: the Firestore rules refused it. Publish firestore.rules, then reload.'
-              /* Same two-audience problem as the NOT ENROLLED card, and the same
-                 answer. This used to say "Create it with role: admin", which is
-                 right for an operator and dangerous for the node account - the
-                 credential that lives in ESP32 firmware, which is exactly the
-                 account most likely to be signed in here while someone checks
-                 the app works. Enrolling it would hand firmware on a wall read
-                 access to the residents' contact details. */
+
               : 'Not enrolled: there is no <code>users/' + esc(S.profile.uid) + '</code> document. ' +
                 'An operator account needs one, created by an admin. ' +
                 'A node account is not meant to have one - sign out and use your operator account.') +
@@ -894,11 +731,7 @@ function viewUserMenu() {
         : '') +
     '</div>' +
     '<div class="menu__list">' +
-      /* There is no role toggle here, deliberately. The role is whatever
-         users/{uid}.role says, and the rules re-check it server-side on every
-         write, so a client-side switch would change the label and nothing else:
-         it announced "now acting as admin" while every admin action stayed
-         refused. A control that lies about permissions is worse than none. */
+
       '<button class="menu__item" role="menuitem" data-act="nav" data-arg="settings">Settings</button>' +
       '<button class="menu__item menu__item--danger" role="menuitem" data-act="sign-out">Sign out</button>' +
     '</div>' +
@@ -906,8 +739,7 @@ function viewUserMenu() {
 }
 
 function viewBanner(vms, worst, offZones, unacked) {
-  /* Nothing reporting is not the same as nothing wrong. Claiming "all zones
-     normal" over an empty fleet is the worst thing a fire console can say. */
+
   if (!vms.length) {
     return '' +
     '<div class="banner sev-off" role="status" aria-live="polite">' +
@@ -931,9 +763,6 @@ function viewBanner(vms, worst, offZones, unacked) {
   var onlineCount = vms.length - offZones.length;
   var nodeWord = function (n) { return n + (n === 1 ? ' node' : ' nodes'); };
 
-  /* Every node offline is not "normal". worst is -1 there, which fell through to
-     the all-clear branch and put the most reassuring sentence on screen at the
-     moment the console could see least. */
   if (!onlineCount) {
     return '' +
     '<div class="banner sev-off" role="status" aria-live="polite">' +
@@ -958,7 +787,7 @@ function viewBanner(vms, worst, offZones, unacked) {
   var title = worst === 3 ? crit.map(function (v) { return v.z.id + ' ' + v.z.name; }).join(', ') + ': CRITICAL'
     : worst === 2 ? 'Elevated: ' + vms.filter(function (v) { return v.level === 2; }).map(function (v) { return v.z.name; }).join(', ')
     : worst === 1 ? 'Caution: ' + vms.filter(function (v) { return v.level === 1; }).map(function (v) { return v.z.name; }).join(', ')
-    /* Qualified: some zones may be offline and therefore unclassified. */
+
     : offZones.length ? 'All reporting zones normal' : 'All zones normal';
 
   var detail = worst === 3
@@ -994,9 +823,6 @@ function viewBanner(vms, worst, offZones, unacked) {
   '</div>';
 }
 
-/* The word earns its place by being able to say the opposite. If telemetry has
-   not landed within three sample intervals the indicator flips to "stale", so a
-   frozen feed is visible instead of being a clock that quietly stopped. */
 function viewLiveDot() {
   var newest = freshestSeen();
   var live = newest > 0 && (S.now - newest) < heartbeatTimeout();
@@ -1006,9 +832,6 @@ function viewLiveDot() {
   '</span>';
 }
 
-/* Left of the toolbar is per-section navigation, right is always the live
-   telemetry clock, so "is this screen still updating?" is answered in the same
-   place on every section. */
 function viewToolbar(sel) {
   var left = '';
 
@@ -1029,9 +852,7 @@ function viewToolbar(sel) {
   } else if (S.section === 'dispatch') {
     left = '<span class="sub toolbar__hint">Outgoing alerts and their delivery state.</span>';
   } else {
-    /* Was "Changes apply to the running simulation immediately" - left over
-       from demo mode, which no longer exists. Thresholds really are per-browser;
-       saying so is the honest version of that sentence. */
+
     left = '<span class="sub toolbar__hint">Threshold edits apply to this browser only, on the next telemetry tick.</span>';
   }
 
@@ -1046,8 +867,6 @@ function viewToolbar(sel) {
   '</div>';
 }
 
-/* Which live feed each section cannot render without. Settings needs none - it
-   reads configuration, not telemetry. */
 var SECTION_NEEDS = {
   dashboard:  ['zones', 'events', 'dispatches'],
   monitoring: ['zones'],
@@ -1062,21 +881,16 @@ function sectionLoading() {
   return need.some(function (k) { return !S.live[k]; });
 }
 
-/* Setup faults are the likeliest reason a fresh deployment shows nothing, so
-   they get a card that names the fix rather than an empty table. */
 function viewFeedErrors() {
   var need = SECTION_NEEDS[S.section] || [];
   var bad = need.map(function (k) { return S.feedError[k]; }).filter(Boolean);
   if (!bad.length) return '';
 
   var anyDenied = bad.some(function (b) { return b.denied; });
-  /* Reads are gated on enrolment, so a refusal has two very different causes:
-     the rules were never published, or this account has no /users document.
-     Telling an unenrolled operator to go publish rules sends them to the wrong
-     screen entirely. */
+
   var notEnrolled = anyDenied && S.profile && S.profile.profileProblem === 'missing';
   var names = bad.map(function (b) { return b.label; });
-  /* "a and b and c" reads like a fault in the message itself. */
+
   var list = names.length < 3
     ? names.join(' and ')
     : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
@@ -1091,15 +905,7 @@ function viewFeedErrors() {
             '<span class="callout__zone">' + esc(list) + ' could not be read</span>' +
           '</div>' +
           '<p class="callout__body balance">' +
-            /* Two accounts land here and they need opposite advice, so the copy
-               must not pick one. The client cannot tell them apart: /devices is
-               ".read": false in database.rules.json, so there is no way to ask
-               whether this uid is a node. Saying only "an admin has to create
-               one" is actively dangerous for the case that reaches this card
-               most often on a fresh build - somebody signing in with the node
-               credential to check it works. Enrolling that uid would give
-               firmware bolted to a wall read access to the dispatch list, which
-               is the exact hole enrolled() exists to close. */
+
             (notEnrolled
               ? 'This account is signed in, but it is not enrolled on this console. There is no ' +
                 '<code>users/' + esc(S.profile.uid) + '</code> document, so the rules allow it nothing. ' +
@@ -1119,11 +925,10 @@ function viewFeedErrors() {
 }
 
 function viewSection(vms, sel, now) {
-  /* A refused feed is not a slow feed. Report it before drawing bones. */
+
   var failed = viewFeedErrors();
   if (failed) return failed;
 
-  /* A section whose feed has not delivered yet shows bones, not an empty table. */
   if (sectionLoading()) return viewSectionSkeleton();
 
   if (S.section === 'dashboard') return viewDashboard(vms, now);
@@ -1137,12 +942,6 @@ function viewSection(vms, sel, now) {
   return viewNotifs(now);
 }
 
-/* -- dashboard ------------------------------------------------------------- */
-
-/* Hourly / daily counts for the overview charts. Real events are counted where
-   the log reaches; buckets older than the log are filled from the same seeded
-   PRNG the sensor history uses, so the shape is stable across ticks instead of
-   reshuffling every second. */
 function bucketSeries(items, n, stepMs, now, seedKey, lo, hi) {
   var out = [], oldest = items.length ? items[items.length - 1].ts : now;
   var rand = rng(hash(seedKey));
@@ -1167,9 +966,6 @@ function viewDashboard(vms, now) {
   var unacked = S.events.filter(function (e) { return !e.acked; });
   var online = S.zones.length - offZones.length;
 
-  /* ---- KPI row ----
-     Every "nothing is wrong" reading has to be qualified by whether anything is
-     reporting at all. A green 0 over an empty fleet is worse than no tile. */
   var none = !vms.length;
   var newest = S.zones.reduce(function (a, z) { return Math.max(a, z.lastSeen || 0); }, 0);
   var hbTimeout = (window.FUSE_CONFIG && window.FUSE_CONFIG.heartbeatTimeoutMs) || 60000;
@@ -1206,9 +1002,7 @@ function viewDashboard(vms, now) {
         : offZones.length ? offZones.map(function (v) { return v.z.id; }).join(', ') + ' unreachable'
         : 'every node reporting'
     },
-    /* Uptime used to sit here as a seeded constant with nothing behind it. A
-       fabricated metric on a live screen is worse than no metric at all, so this
-       is the freshest heartbeat, which is measured. */
+
     {
       k: 'Last Reading', icon: 'clock',
       cls: !newest ? 'sev-off' : (now - newest) < hbTimeout ? 'sev-0' : 'sev-2',
@@ -1218,9 +1012,6 @@ function viewDashboard(vms, now) {
     }
   ];
 
-  /* Chips sit on the value row, not the header: at a quarter of the dashboard
-     width the header cannot hold an icon, a label and two chips without
-     truncating the label to an initial. */
   var kpiRow = '<div class="kpis">' + kpis.map(function (t) {
     return '<div class="kpi ' + t.cls + '">' +
       '<div class="kpi__hd">' +
@@ -1239,14 +1030,8 @@ function viewDashboard(vms, now) {
     '</div>';
   }).join('') + '</div>';
 
-  /* ---- Operational status callouts ---- */
-  /* Worst first, and offline last within a level - an unreachable node is a
-     gap in coverage, not a fire. */
   var callouts = elevated.concat(offZones).sort(function (a, b) { return b.level - a.level; }).slice(0, 3);
 
-  /* Each block carries the severity three ways: the rail, the chip, and the
-     rule that fired. The old version leaned on a tinted title alone, which at a
-     glance made all three blocks read as the same grey. */
   function calloutBlock(v) {
     var offline = v.off;
     return '<div class="callout ' + v.sv.cls + '">' +
@@ -1285,8 +1070,7 @@ function viewDashboard(vms, now) {
   if (callouts.length) {
     calloutHtml = callouts.map(calloutBlock).join('');
   } else if (none) {
-    /* "All zones nominal" over an empty fleet would be a clean bill of health
-       for a building nothing is watching. */
+
     calloutHtml = plainCallout('sev-off', -1, 'NO DATA', 'Nothing is reporting',
       FUSE.mode === 'firebase'
         ? 'No node has published a reading, so no zone has a severity. This is an absence of information, not an all-clear. Check that the nodes are powered, on the network, and enrolled in /devices.'
@@ -1296,7 +1080,6 @@ function viewDashboard(vms, now) {
       'All five sensors on every reporting node sit inside their nominal bands. No fusion rule has triggered.');
   }
 
-  /* ---- Recent dispatches ---- */
   var dispatchRows = S.notifs.slice(0, 5).map(function (n) {
     var st = statusOf(n.status);
     return '<tr>' +
@@ -1313,7 +1096,6 @@ function viewDashboard(vms, now) {
     '</tr>';
   }).join('');
 
-  /* ---- Recent events ---- */
   var eventRows = S.events.slice(0, 6).map(function (e) {
     var si = SEV.findIndex(function (x) { return x.key === e.to; });
     var z = zoneById(e.zone);
@@ -1328,7 +1110,6 @@ function viewDashboard(vms, now) {
     '</tr>';
   }).join('');
 
-  /* ---- Charts ---- */
   var incidents = bucketSeries(S.events, 24, 3600000, now, 'incidents-24h', 1, 9);
   var incidentTimes = incidents.map(function (_, i) { return now - (23 - i) * 3600000; });
   var volume = bucketSeries(S.notifs, 7, 86400000, now, 'dispatch-7d', 4, 26);
@@ -1386,8 +1167,6 @@ function viewDashboard(vms, now) {
   '</div>';
 }
 
-/* A single-series area chart. Identity is carried by the panel title and the
-   one-entry key beneath it, so there is no legend box to read. */
 function lineCard(id, title, source, vals, times, fmt, tickAt) {
   var n = vals.length;
   var mx = Math.max.apply(null, vals);
@@ -1431,7 +1210,6 @@ function lineCard(id, title, source, vals, times, fmt, tickAt) {
     '<div class="chart-axis">' + xTicks.map(function (t) { return '<span>' + t + '</span>'; }).join('') + '</div>' +
     '<div class="chart-legend"><span><i class="chart-key__line"></i>' + title + '</span></div>' +
 
-    /* Table-view twin - no value is reachable only by hovering. */
     '<details class="chart-table"><summary>Value table</summary>' +
       '<div class="chart-table__scroll"><table><thead><tr><th scope="col">Time</th><th scope="col">' + title + '</th></tr></thead><tbody>' +
         vals.map(function (v, i) {
@@ -1442,10 +1220,6 @@ function lineCard(id, title, source, vals, times, fmt, tickAt) {
   '</section>';
 }
 
-/* Bars are HTML rather than SVG on purpose: the line charts stretch their
-   viewBox to the card width, which would turn a 4px rounded bar end into an
-   ellipse. Flex boxes keep the radius and the inter-bar gap honest at any
-   width, and hover needs no JS. */
 function barCard(id, title, source, vals, labels, fmt) {
   var mx = Math.max.apply(null, vals);
   var top = Math.max(1, Math.ceil(mx * 1.25 / 5) * 5);
@@ -1486,8 +1260,6 @@ function barCard(id, title, source, vals, labels, fmt) {
     '</details>' +
   '</section>';
 }
-
-/* -- zones grid ------------------------------------------------------------ */
 
 function viewZones(vms) {
   var shown = vms.filter(function (v) {
@@ -1553,8 +1325,6 @@ function zoneCard(v) {
   '</button>';
 }
 
-/* -- zone detail ----------------------------------------------------------- */
-
 function viewDetail(v, now) {
   var z = v.z, c = v.cls;
   var admin = isAdmin();
@@ -1603,13 +1373,11 @@ function viewDetail(v, now) {
   var zevents = S.events.filter(function (e) { return e.zone === z.id; }).slice(0, 6);
 
   return '' +
-  /* The back control lives in the section toolbar, not here - this view used to
-     carry its own and the two rendered one above the other. */
+
   '<div class="detail">' +
     '<div class="detail__cols">' +
       '<div class="detail__col">' +
 
-        /* readings */
         '<section class="card ' + v.sv.cls + '"' + (v.alert || v.off ? ' style="border-color:var(--sev-edge)"' : '') + '>' +
           '<div class="detail__hd">' +
             '<div>' +
@@ -1655,7 +1423,6 @@ function viewDetail(v, now) {
           '</div>' +
         '</section>' +
 
-        /* why this severity */
         '<section class="card">' +
           '<div class="card__hd"><h2 class="h-card">Why this severity</h2><span class="label label--xs">Fusion engine</span></div>' +
           '<div class="card__bd stack gap-3">' +
@@ -1683,7 +1450,6 @@ function viewDetail(v, now) {
           '</div>' +
         '</section>' +
 
-        /* zone event history */
         '<section class="card">' +
           '<div class="card__hd"><h2 class="h-card">Zone event history</h2></div>' +
           '<div class="table-wrap">' +
@@ -1702,7 +1468,7 @@ function viewDetail(v, now) {
       '</div>' +
 
       '<div class="detail__col">' +
-        /* actuators */
+
         '<section class="card">' +
           '<div class="card__hd"><h2 class="h-card">Actuators</h2></div>' +
           '<div class="card__bd stack gap-4">' +
@@ -1721,7 +1487,6 @@ function viewDetail(v, now) {
           '</div>' +
         '</section>' +
 
-        /* manual override */
         '<section class="card">' +
           '<div class="card__hd">' +
             '<h2 class="h-card">Manual override</h2>' +
@@ -1743,7 +1508,6 @@ function viewDetail(v, now) {
           '</div>' +
         '</section>' +
 
-        /* telemetry */
         '<section class="card">' +
           '<div class="card__hd"><h2 class="h-card">Node telemetry</h2></div>' +
           '<div class="card__bd" style="padding-top:2px;padding-bottom:6px">' +
@@ -1757,8 +1521,6 @@ function viewDetail(v, now) {
     '</div>' +
   '</div>';
 }
-
-/* -- event log ------------------------------------------------------------- */
 
 function eventRow(e, now, compact) {
   var si = SEV.findIndex(function (x) { return x.key === e.to; });
@@ -1816,8 +1578,7 @@ function viewEvents(now) {
   var ackOpts = [{ v: 'ALL', l: 'All' }, { v: 'PENDING', l: 'Awaiting review' }, { v: 'REVIEWED', l: 'Reviewed' }];
 
   return '' +
-  /* Search lives in the topbar and scopes this list; only the dimension
-     filters belong here. */
+
   '<div class="filters">' +
     filterSelect('SEVERITY', 'filter-sev', f.sev, sevOpts) +
     filterSelect('ZONE', 'filter-zone', f.zone, zoneOpts) +
@@ -1825,9 +1586,7 @@ function viewEvents(now) {
   '</div>' +
   '<section class="card">' +
     '<div class="table-wrap" style="border-radius:7px">' +
-      /* Sized so the acknowledgement column lands inside a 1024px viewport -
-         it was being clipped by the horizontal scroll, which is the one column
-         an operator has to be able to act on. */
+
       '<table class="table" style="min-width:760px">' +
         '<caption class="sr-only">Severity transitions logged by the fusion engine</caption>' +
         '<thead><tr>' +
@@ -1839,9 +1598,7 @@ function viewEvents(now) {
         '</tr></thead>' +
         '<tbody>' + (rows.length ? rows.map(function (e) { return eventRow(e, now, false); }).join('')
           : emptyRow(5, emptyMsg(S.events.length,
-              /* On a live deployment the likeliest reason this is empty is that
-                 nothing writes transitions yet. Say so, rather than implying a
-                 quiet building. */
+
               FUSE.mode === 'firebase'
                 ? 'No severity transitions have been logged yet. These are written server-side by a Cloud Function when a zone changes level.'
                 : 'No severity transitions have been logged yet.',
@@ -1863,12 +1620,8 @@ function filterSelect(label, act, value, opts) {
   '</span>';
 }
 
-/* -- historical ------------------------------------------------------------ */
-
 var CHART_DATA = {};
 
-/* `th` and `thLabel` are getters, not values: Settings can move a threshold and
-   the rule line has to move with it. */
 var PANELS = [
   { sensor: 'temp',  title: 'Temperature',       source: 'DS18B20',        fmt: function (v) { return v.toFixed(1) + ' °C'; } },
   { sensor: 'gas',   title: 'Combustible gas',   source: 'MQ-2 raw ADC',   fmt: function (v) { return Math.round(v) + ' ADC'; } },
@@ -1896,7 +1649,6 @@ function viewCharts(now) {
     var top = p.sensor === 'flame' ? 1.2 : Math.max(mx * 1.15, pTh * 1.1);
     var bot = p.sensor === 'flame' ? -0.1 : Math.max(0, mn - (mx - mn) * 0.25);
 
-    /* The hover layer must plot on exactly this scale, so it travels with the data. */
     CHART_DATA[id] = {
       vals: vals, times: times, fmt: p.fmt, title: p.title,
       top: top, bot: bot, digital: p.sensor === 'flame', w: W, h: H
@@ -1904,8 +1656,7 @@ function viewCharts(now) {
 
     var plot;
     if (p.sensor === 'flame') {
-      /* A digital channel is a state timeline, not a curve - a track with the
-         detected runs laid into it, so "clear" is visible as well as "detected". */
+
       var top0 = H / 2 - 15, bandH = 30;
       var bands = '<rect class="chart__track" x="0" y="' + top0 + '" width="' + W + '" height="' + bandH + '" rx="2"/>';
       var run = null;
@@ -1927,8 +1678,7 @@ function viewCharts(now) {
       var thY = H - ((pTh - bot) / (top - bot || 1)) * H;
       plot =
         '<path class="chart__area" d="' + d + ' L' + W + ' ' + H + ' L0 ' + H + ' Z"/>' +
-        /* Labelled at the left, where these series run flat - at the right it
-           would sit on top of the rising line. */
+
         (thY > 6 && thY < H - 6
           ? '<line class="chart__threshold" x1="0" y1="' + thY.toFixed(1) + '" x2="' + W + '" y2="' + thY.toFixed(1) + '"/>' +
             '<text class="chart__thlabel" x="2" y="' + (thY - 6).toFixed(1) + '">' + panelThLabel(p) + '</text>'
@@ -1973,7 +1723,6 @@ function viewCharts(now) {
 
       '<div class="chart-axis">' + ticks.map(function (t) { return '<span>' + t + '</span>'; }).join('') + '</div>' +
 
-      /* Table-view twin - no value is reachable only by hovering. */
       '<details class="chart-table">' +
         '<summary>Value table</summary>' +
         '<div class="chart-table__scroll">' +
@@ -2007,8 +1756,6 @@ function viewCharts(now) {
   '<div class="chart-grid">' + panels + '</div>';
 }
 
-/* -- contacts -------------------------------------------------------------- */
-
 function viewContacts() {
   var admin = isAdmin();
   var shown = S.contacts.filter(function (c) {
@@ -2020,9 +1767,7 @@ function viewContacts() {
     '<div class="table-wrap" style="border-radius:7px">' +
       '<table class="table" style="min-width:748px">' +
         '<caption class="sr-only">Emergency contact dispatch list</caption>' +
-        /* Every column is sized. Leaving Role to `max-width:1px` starved it to
-           six characters while the table was already scrolling horizontally, and
-           the total is held under 1024px so Actions stays reachable. */
+
         '<thead><tr>' +
           '<th scope="col" style="width:136px">Name</th><th scope="col" style="width:124px">Role</th>' +
           '<th scope="col" style="width:168px">Contact</th>' +
@@ -2057,8 +1802,6 @@ function viewContacts() {
   '</section>';
 }
 
-/* -- dispatch log ---------------------------------------------------------- */
-
 function viewNotifs(now) {
   var admin = isAdmin();
   var sent = S.notifs.filter(function (n) { return n.status === 'sent'; }).length;
@@ -2071,7 +1814,6 @@ function viewNotifs(now) {
     { k: 'Pending',          v: pending, cls: 'sev-1' },
     { k: 'Failed',           v: failed,  cls: failed ? 'sev-3' : '' }
   ];
-
 
   var shownNotifs = S.notifs.filter(function (n) {
     var z = zoneById(n.zone);
@@ -2089,8 +1831,7 @@ function viewNotifs(now) {
   '</div>' +
   '<section class="card">' +
     '<div class="table-wrap" style="border-radius:7px">' +
-      /* Delivery carries the retry control, so it must not fall off the right
-         edge on a 1024px screen. */
+
       '<table class="table" style="min-width:780px">' +
         '<caption class="sr-only">Outgoing alert dispatches</caption>' +
         '<thead><tr>' +
@@ -2127,8 +1868,6 @@ function viewNotifs(now) {
   '</section>';
 }
 
-/* -- settings -------------------------------------------------------------- */
-
 function settingSelect(act, value, opts) {
   return '<select class="select select--sm" data-change="' + act + '" data-value="' + esc(value) + '" aria-label="' + act + '">' +
     opts.map(function (o) {
@@ -2159,8 +1898,6 @@ function viewSettings() {
   return '' +
   '<div class="set-grid">' +
 
-    /* Scenario and sample-interval controls would be lying here - the nodes
-       decide both - so the card reports the connection instead. */
     '<section class="card">' +
           '<div class="card__hd"><h2 class="h-card">Telemetry source</h2>' +
             '<span class="label label--xs sev-0" style="color:var(--sev-ink)">Live</span></div>' +
@@ -2199,9 +1936,7 @@ function viewSettings() {
             '<div><p class="set-row__k">' + s.label + '</p>' +
               '<p class="set-row__note">' + s.unit + '</p></div>' +
             TH[s.k].map(function (v, i) {
-              /* decimal, not numeric: the handler accepts fractional thresholds
-                 (smoke is %obs, temp is °C) but `numeric` asks Android for a
-                 digits-only keypad with no decimal separator. */
+
               return '<input class="input" type="number" inputmode="decimal"' +
                 ' aria-label="' + s.label + ' ' + ['caution', 'warning', 'critical'][i] + ' threshold"' +
                 ' data-input="th-' + s.k + '-' + i + '" value="' + v + '"' + (admin ? '' : ' disabled') + '>';
@@ -2210,8 +1945,7 @@ function viewSettings() {
         }).join('') +
         '<p class="sub mt-4 balance">Thresholds feed <code>classify()</code> directly. Moving one re-classifies every zone on the next tick and re-draws the rule line on the historical panels.' +
           (FUSE.mode === 'firebase'
-            /* Being honest beats being quiet: an operator who assumes these are
-               system-wide would think they had retuned the building. */
+
             ? ' <strong>They are held in this browser only</strong>, so they reset on reload and other operators keep their own. Storing them centrally needs a shared config document, which does not exist yet.'
             : '') + '</p>' +
       '</div>' +
@@ -2264,8 +1998,6 @@ function thIsDefault() {
     return TH[k].every(function (v, i) { return v === TH_DEFAULT[k][i]; });
   });
 }
-
-/* -- overlays -------------------------------------------------------------- */
 
 function viewOverlay() {
   if (S.confirm) {
@@ -2337,9 +2069,7 @@ function viewOverlay() {
 
 function viewToast() {
   if (!S.toast) return '';
-  /* Tappable to dismiss. On a phone the toast is a full-width band across the
-     most reachable part of the screen, so it needs a way out that is not
-     "wait 4.2 seconds". */
+
   return '<div class="toast ' + S.toast.cls + '" data-act="toast-dismiss" role="button" tabindex="0" aria-label="Dismiss notification">' +
     '<span class="toast__rail" aria-hidden="true"></span>' +
     '<div>' +
@@ -2349,11 +2079,6 @@ function viewToast() {
   '</div>';
 }
 
-/* --------------------------------------------------------------- renderer -- */
-
-/* Morphs `el` towards `html` in place. Keeps focus, selection, scroll
-   position, hover state and running transitions - which a plain innerHTML
-   swap at 1 Hz would destroy. */
 function morph(el, html) {
   var tmp = document.createElement('div');
   tmp.innerHTML = html;
@@ -2392,12 +2117,11 @@ function morphNode(parent, o, t) {
   for (i = o.attributes.length - 1; i >= 0; i--) {
     a = o.attributes[i];
     if (t.hasAttribute(a.name)) continue;
-    /* `open` on a <details> is user state the markup never carries. */
+
     if (o.nodeName === 'DETAILS' && a.name === 'open') continue;
     o.removeAttribute(a.name);
   }
 
-  /* Live form values are owned by the DOM while focused. */
   if (o.nodeName === 'INPUT') {
     if (document.activeElement !== o) o.value = t.getAttribute('value') || '';
     return;
@@ -2418,16 +2142,6 @@ var toasts = document.getElementById('toasts');
 var lastShell = '';
 var resetScroll = false;
 
-/* --- Android back gesture -------------------------------------------------
-   Back is the reflex for dismissing a sheet on Android, and in the packaged app
-   there is no browser chrome to absorb it: without this, back closed the entire
-   console instead of the dialog sitting on top of it, discarding a half-typed
-   contact with it. The WebView's back maps to history.back(), so one sentinel
-   entry per overlay opening is enough, and it costs the web build nothing.
-
-   The depth flag keeps push and pop paired. Closing through the UI pops the
-   sentinel; the resulting popstate finds no overlay open and does nothing, so
-   the two paths cannot loop into each other. */
 function overlayOpen() { return !!(S && (S.confirm || S.cform || S.menu)); }
 
 var overlaySentinel = 0;
@@ -2445,27 +2159,14 @@ function syncOverlayHistory() {
 
 window.addEventListener('popstate', function () {
   if (!overlayOpen()) return;
-  /* The entry is already gone, so do not try to pop it again. */
+
   overlaySentinel = 0;
   S.confirm = null; S.cform = null; S.menu = false;
   render();
 });
 
 function render() {
-  /* One clock, and this is where it advances.
 
-     S.now used to be assigned only inside beat(), while z.online and z.level
-     were computed from Date.now() at every snapshot arrival. So a render
-     triggered by a snapshot - not by the tick - drew every "N ago" label and the
-     live/stale dot from a clock that could be far behind the one that had just
-     decided which nodes were offline. The visible symptom was the banner saying
-     "All 7 nodes offline" beside a toolbar reading "live, updated 2s ago".
-
-     It drifts worst exactly when it matters: browsers throttle setInterval to
-     about once a minute in a background tab and can freeze it outright, while
-     RTDB listeners keep firing and keep calling render(). Reading it once here
-     also keeps the value stable for the whole pass, so two panels in the same
-     frame cannot disagree about what time it is. */
   S.now = Date.now();
 
   var shell = S.loggedIn ? 'app' : 'login';
@@ -2474,15 +2175,10 @@ function render() {
   morph(root, S.loggedIn ? viewApp() : viewLogin());
   morph(overlay, (S.loggedIn ? viewUserMenu() : '') + viewOverlay());
 
-  /* Lock the document while an overlay is up. On <html>, not <body>, because
-     below 960px the document element is the scroller - without this a drag on
-     the scrim scrolls the page behind the dialog, and you cancel out somewhere
-     other than where you started. */
   document.documentElement.style.overflow = overlayOpen() ? 'hidden' : '';
   syncOverlayHistory();
   morph(toasts, viewToast());
 
-  /* Restore hover readout on any chart the pointer is still over. */
   Object.keys(hoverState).forEach(function (id) {
     var el = document.getElementById(id);
     if (el) placeCrosshair(el, hoverState[id]);
@@ -2492,13 +2188,9 @@ function render() {
     resetScroll = false;
     var main = document.getElementById('main');
     if (main) main.scrollTop = 0;
-    /* Below 960px .content stops being a scroll container and the document
-       scrolls instead, so resetting #main alone was a no-op on every phone:
-       every nav tap landed wherever the previous section had been scrolled to,
-       which reads as a half-rendered screen. */
+
     window.scrollTo(0, 0);
-    /* The nav is one horizontally scrolling row at that width, so the section
-       just opened can sit off the right edge of it. */
+
     var cur = document.querySelector('.nav__item[aria-current="page"]');
     if (cur && cur.scrollIntoView) cur.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
@@ -2506,8 +2198,6 @@ function render() {
   var af = document.querySelector('[data-autofocus]');
   if (af && af !== document.activeElement && !overlay.contains(document.activeElement)) af.focus();
 }
-
-/* -------------------------------------------------------- chart interaction */
 
 var hoverState = {};
 
@@ -2524,14 +2214,11 @@ function placeCrosshair(chart, ratio) {
   var tip = chart.querySelector('.chart-tip');
   if (!svg || !cross || !tip) return;
 
-  /* The dashboard panels are shorter than the historical ones, so the geometry
-     travels with the data rather than being read off the module constants. */
   var cw = data.w || W, ch = data.h || H;
 
   var x = (i / (n - 1)) * cw;
   cross.setAttribute('x1', x); cross.setAttribute('x2', x);
 
-  /* Marker rides the plotted point, on the scale the path was drawn with. */
   var y = ch - ((data.vals[i] - data.bot) / (data.top - data.bot || 1)) * ch;
   if (marker) {
     marker.setAttribute('cx', x);
@@ -2571,8 +2258,6 @@ document.addEventListener('pointermove', function (e) {
   placeCrosshair(chart, Math.max(0, Math.min(1, (e.clientX - box.left) / box.width)));
 });
 
-/* pointermove already drops the crosshair when the pointer is off a chart;
-   this only covers the pointer leaving the window entirely. */
 document.addEventListener('pointerout', function (e) {
   if (e.relatedTarget) return;
   Object.keys(hoverState).forEach(function (id) {
@@ -2581,14 +2266,11 @@ document.addEventListener('pointerout', function (e) {
   });
 });
 
-/* ---------------------------------------------------------------- events -- */
-
 document.addEventListener('click', function (e) {
-  if (!S) return;   /* listeners are bound before the backend resolves */
+  if (!S) return;
   var el = e.target.closest ? e.target.closest('[data-act]') : null;
   if (!el) {
-    /* A click on bare page dismisses the account menu - but not a click landing
-       inside it, which would swallow the menu's own controls. */
+
     if (S.menu && !(e.target.closest && e.target.closest('.menu'))) { S.menu = false; render(); }
     return;
   }
@@ -2596,7 +2278,6 @@ document.addEventListener('click', function (e) {
   var act = el.getAttribute('data-act');
   var arg = el.getAttribute('data-arg');
 
-  /* Scrim dismissals must not fire when the click landed inside the dialog. */
   if (act === 'confirm-cancel-scrim' || act === 'contact-cancel-scrim') {
     if (e.target.closest('[data-stop]')) return;
     S.confirm = null; S.cform = null; render();
@@ -2606,15 +2287,13 @@ document.addEventListener('click', function (e) {
   if (el.tagName === 'FORM') return;
   if (el.disabled) return;
 
-  /* Any click that is not the account button itself closes the account menu. */
   if (act !== 'user-menu' && S.menu) S.menu = false;
 
   switch (act) {
     case 'nav':
       S.section = arg;
       S.selected = null;
-      /* The topbar search scopes the section it was typed in; carrying a stale
-         query into a different section would silently hide rows. */
+
       S.filters.q = '';
       resetScroll = true;
       break;
@@ -2629,8 +2308,7 @@ document.addEventListener('click', function (e) {
       return;
     case 'sign-out':
       S.menu = false;
-      /* onAuth drives the rest: it clears the profile, drops the subscriptions
-         and returns the console to the sign-in screen. */
+
       FUSE.signOut();
       return;
     case 'sign-in-google': {
@@ -2658,9 +2336,7 @@ document.addEventListener('click', function (e) {
       S.cform = { name: '', role: '', phone: '', email: '', channel: 'SMS', scope: 'All zones', min: 'WARNING' };
       break;
     case 'edit-contact':
-      /* The button is disabled for viewers, so this only fires if something
-         re-enabled it. The rules would refuse the save anyway; refusing here
-         means a viewer never gets a form that cannot be submitted. */
+
       if (!isAdmin()) { denied('Only admins can edit the contact list.'); return; }
       S.cform = Object.assign({}, S.contacts.filter(function (x) { return x.id === arg; })[0]);
       break;
@@ -2682,9 +2358,6 @@ document.addEventListener('click', function (e) {
   render();
 });
 
-/* Firebase error codes are not operator-facing copy. Two audiences here: an
-   operator who mistyped, and whoever is standing up the deployment - a
-   misconfigured project must say so rather than read as a bad password. */
 function authMessage(err) {
   var code = (err && err.code) || '';
   var raw = (err && err.message) || '';
@@ -2701,7 +2374,6 @@ function authMessage(err) {
   if (code === 'auth/popup-blocked') return 'The browser blocked the Google window. Allow popups for this site and retry.';
   if (code === 'auth/network-request-failed') return 'No connection to the auth service. Check the network and retry.';
 
-  /* Deployment problems, not credential problems. */
   if (/api-key-not-valid|invalid-api-key/.test(code + raw)) {
     return 'This console’s Firebase configuration is not valid. Check the keys in assets/js/firebase-config.js.';
   }
@@ -2712,8 +2384,6 @@ function authMessage(err) {
     return 'This domain is not on the project’s authorised list. Add it under Authentication → Settings → Authorised domains.';
   }
 
-  /* Anything unmapped: drop the "Firebase: Error (...)" wrapper so the operator
-     sees the code alone rather than a nested sentence. */
   var m = /\(([^)]+)\)/.exec(raw);
   return 'Sign-in failed' + (m ? ': ' + m[1] : '') + '.';
 }
@@ -2728,7 +2398,7 @@ document.addEventListener('submit', function (e) {
   FUSE.signIn(S.loginId, S.loginPass).catch(function (err) {
     S.auth.busy = null;
     S.auth.error = authMessage(err);
-    /* Never leave a rejected password sitting in the field. */
+
     S.loginPass = '';
     render();
   });
@@ -2744,9 +2414,6 @@ document.addEventListener('input', function (e) {
   if (key === 'login-pass') { S.loginPass = v; return; }
   if (key.indexOf('cform-') === 0 && S.cform) { S.cform[key.slice(6)] = v; return; }
 
-  /* th-<sensor>-<index>. The field keeps whatever was typed while it has focus
-     (the morph leaves focused inputs alone), so only a parseable, in-order value
-     reaches TH - a half-typed "1" must not re-classify the building. */
   if (key.indexOf('th-') === 0) {
     if (!isAdmin()) return;
     var parts = key.split('-'), sensor = parts[1], idx = parseInt(parts[2], 10);
@@ -2784,7 +2451,6 @@ document.addEventListener('keydown', function (e) {
   else if (S.selected) { S.selected = null; render(); }
 });
 
-/* Focus stays inside an open dialog. */
 document.addEventListener('keydown', function (e) {
   if (e.key !== 'Tab') return;
   var dialog = overlay.querySelector('[role="dialog"]');
@@ -2796,17 +2462,11 @@ document.addEventListener('keydown', function (e) {
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 });
 
-/* ------------------------------------------------------------------ boot -- */
-
 function hideGhost() {
   var boot = document.getElementById('boot');
   if (boot) boot.hidden = true;
 }
 
-/* Live subscriptions. Each one flips its own `S.live` flag on first delivery,
-   which is what retires that section's skeleton. */
-/* A refused or broken feed retires its skeleton and records why. Leaving the
-   skeleton up would say "still loading" when the truth is "not allowed". */
 function feedFailed(key, label) {
   return function (err) {
     var code = (err && err.code) || '';
@@ -2828,8 +2488,7 @@ function subscribeLive() {
   S.feedError = {};
   subs.push(FUSE.onZones(function (zones) {
     S.snap.zones = zones;
-    /* Keep whatever the operator is looking at: merge readings onto the existing
-       objects so a re-render does not blow away a selected zone. */
+
     S.zones = zones.map(function (z) {
       var prev = zoneById(z.id) || {};
       return Object.assign({}, prev, z, { t: null, flashUntil: prev.flashUntil || 0 });
@@ -2866,8 +2525,6 @@ window.FUSE_READY.then(function (api) {
   FUSE = api;
   S = initialState();
 
-  /* Auth is the only gate. There is no other path into the console: no
-     simulator to fall back to, and no client-side role to pick. */
   FUSE.onAuth(function (profile) {
     if (profile) {
       S.profile = withCls(profile);

@@ -2,12 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<!-- viewport-fit=cover lets the layout reach under the notch; the safe-area
-     insets in styles.css then keep content clear of it. -->
+
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- `only light` rather than `light`: it is the documented opt-out from Chrome
-     Android's Auto Dark Theme, which would otherwise re-map the severity palette
-     that was measured against a white ground. Matches color-scheme in styles.css. -->
+
 <meta name="color-scheme" content="only light">
 <meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes">
@@ -17,26 +14,14 @@
 <meta name="description" content="FUSE, a multi-sensor fire detection console. Smoke, flame, heat and combustible-gas readings are fused per zone before any alert is raised.">
 <title>FUSE · Fire Detection Console</title>
 
-<!-- Inter ships with the app rather than coming from fonts.googleapis.com. The
-     whole design system is built on it, and a CDN failure used to drop the
-     console onto a system sans - different metrics, and .num loses the tabular
-     figures that keep a changing reading in its column. The Android build runs
-     from local assets, so a remote typeface would have been the one thing on
-     screen that needed the network to look right.
-     Preloaded because the @font-face lives inside styles.css, so the browser
-     would not otherwise discover it until the stylesheet had parsed. -->
 <link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/css/styles.css">
 
 <link rel="icon" type="image/png" href="assets/img/fuse-symbol.png">
 <link rel="apple-touch-icon" href="assets/img/fuse-symbol.png">
 
-<!-- Resolved by assets/js/backend.js once it knows whether Firebase is reachable. -->
 <script>window.FUSE_READY = new Promise(function (r) { window.__fuseReady = r; });</script>
 
-<!-- The ghost screen has to paint before styles.css and the fonts arrive, so its
-     rules live here rather than in the design system. It is removed by the first
-     real render; on a slow line it is what the operator looks at meanwhile. -->
 <style>
   :root { --gh-bg:#F7F8FA; --gh-card:#fff; --gh-line:#E5E7EB; --gh-bone:#E9ECF1; }
   html,body { margin:0; }
@@ -75,8 +60,6 @@
 
 <a class="skip-link" href="#main">Skip to content</a>
 
-<!-- Ghost screen. Mirrors the real shell's geometry so the page does not jump
-     when the console replaces it. -->
 <div id="boot" role="status" aria-live="polite" aria-label="Loading the FUSE console">
   <div class="gh-side">
     <div class="gh-brand">
