@@ -69,25 +69,26 @@ cd android && ./gradlew assembleDebug
 `npx cap sync` is not optional. Editing `www/` alone changes nothing in the APK,
 because the build reads from `android/app/src/main/assets/public`.
 
-## This APK is debug-signed
+## Signing
 
-It is signed with the Android debug keystore, which means:
+`dist/fuse-debug.apk` is signed with the Android debug keystore — it sideloads
+and runs, but **cannot** go to Google Play and is not a trusted build for
+distribution.
 
-- it installs by sideloading and runs normally,
-- it **cannot** be published to Google Play,
-- it is not suitable for distribution to residents or staff as a trusted build.
-
-That is fine for a demonstration or a defence, and wrong for anything else. A
-release build needs a keystore you generate and keep out of this repository:
+`dist/fuse-release.apk` is a **signed release build**: `android/app/build.gradle`
+reads `android/keystore.properties` (untracked) for the keystore path, alias and
+passwords, and signs with `android/fuse-release.jks` (untracked). Keep both out of
+git and backed up — `*.jks`, `*.keystore` and `keystore.properties` are
+gitignored, and losing the keystore means no future updates under the same
+identity. To recreate the keystore on another machine:
 
 ```bash
-keytool -genkey -v -keystore fuse-release.jks -keyalg RSA \
+keytool -genkey -v -keystore android/fuse-release.jks -keyalg RSA \
         -keysize 2048 -validity 10000 -alias fuse
 ```
 
-Then wire `signingConfigs` in `android/app/build.gradle` and read the passwords
-from an untracked `keystore.properties` or the environment. Never commit either
-the keystore or its passwords. `*.jks` and `*.keystore` are already gitignored.
+Then write `android/keystore.properties` with `storeFile`, `storePassword`,
+`keyAlias` and `keyPassword`.
 
 ## google-services.json is committed, deliberately
 

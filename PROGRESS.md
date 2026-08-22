@@ -35,8 +35,9 @@ no actuators.
 - `styles.css` adds `.cam__img`.
 - **APKs rebuilt** with all changes (JDK 21) and committed under `dist/`:
   - `dist/fuse-debug.apk` — debug-signed, installs by sideload.
-  - `dist/fuse-release-unsigned.apk` — release build, **unsigned** (no keystore
-    committed, per the README). Must be signed before it will install; see below.
+  - `dist/fuse-release.apk` — release build, **signed** with the project keystore
+    (`android/fuse-release.jks`, alias `fuse`) via `android/keystore.properties`;
+    verified with `apksigner` (exit 0).
   - each with a matching `.sha256`.
 
 **Raspberry Pi bridge (new, in `pi/`)**
@@ -60,12 +61,11 @@ no actuators.
    confirm the camera zone appears with a live frame and escalates on flame.
 3. Optional: `smoke` from vision (add to `FUSE_SENSORS`), signed URLs instead of
    token URLs, a systemd unit so the bridge auto-starts.
-4. To make `dist/fuse-release-unsigned.apk` installable, sign it with your own
-   keystore (never commit it):
-   ```
-   keytool -genkey -v -keystore fuse-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias fuse
-   "%LOCALAPPDATA%\Android\Sdk\build-tools\36.0.0\apksigner" sign --ks fuse-release.jks --out dist/fuse-release.apk dist/fuse-release-unsigned.apk
-   ```
+4. **Back up the release keystore.** Release signing is wired: `build.gradle`
+   reads `android/keystore.properties` → `android/fuse-release.jks` (both
+   untracked/gitignored, on this machine only). Save the `.jks` and its password
+   somewhere safe — losing them means no future signed updates under the same
+   identity.
 
 ---
 
@@ -86,5 +86,6 @@ cd android
 ```
 
 Not committed (generated/secret): `node_modules/`, `android/build/`,
-`android/local.properties`, `pi/serviceAccountKey.json`, the synced
+`android/local.properties`, `android/fuse-release.jks`,
+`android/keystore.properties`, `pi/serviceAccountKey.json`, the synced
 `android/app/src/main/assets/`.

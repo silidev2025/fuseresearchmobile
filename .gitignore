@@ -11,6 +11,7 @@ android/captures/
 *.iml
 *.keystore
 *.jks
+keystore.properties
 local.properties
 
 # Raspberry Pi vision bridge — the service-account key is a real credential.
