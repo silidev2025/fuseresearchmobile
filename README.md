@@ -32,7 +32,10 @@ goes dark, because the invented readings look real.
 
 ## Building
 
-Requires a JDK 17+ and the Android SDK (platform 35, build-tools 35.0.0).
+Requires **JDK 21** and the Android SDK (platform 35, build-tools 34+). Capacitor
+7's Android library compiles at Java 21, so JDK 17 fails with `invalid source
+release: 21`. Android Studio's bundled runtime (`…\Android Studio\jbr`) is a
+JDK 21 and works; point `JAVA_HOME` at it.
 
 ```bash
 npm install

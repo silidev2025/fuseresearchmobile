@@ -13,5 +13,12 @@ android/captures/
 *.jks
 local.properties
 
+# Raspberry Pi vision bridge — the service-account key is a real credential.
+# It grants admin access to the Firebase project. Never commit it.
+pi/serviceAccountKey.json
+pi/*.serviceaccount.json
+pi/.venv/
+pi/__pycache__/
+
 .DS_Store
 Thumbs.db

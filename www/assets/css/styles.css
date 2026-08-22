@@ -693,6 +693,13 @@ pre { font-family: var(--sans); }
 .cam--lg .cam__bracket--br { bottom: 6px; right: 6px; }
 .cam--lg .cam__label { font-size: 9px; padding: 5px 8px; }
 
+.cam__img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  background: var(--sunken); border: 0;
+}
+
 .tiles { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); min-width: 0; }
 .tile {
   padding: 6px 8px 7px;

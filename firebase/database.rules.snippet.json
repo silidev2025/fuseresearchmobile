@@ -1,0 +1,17 @@
+{
+  "_comment": [
+    "MERGE this into database.rules.json in the WEB repo, then deploy from there.",
+    "This is a snippet, not a complete ruleset — do not deploy it on its own or it",
+    "will replace every other rule you have. The Pi writes via the Admin SDK and",
+    "bypasses these rules; what matters here is that operators can READ zones and",
+    "that non-admin clients cannot forge readings."
+  ],
+  "rules": {
+    "zones": {
+      ".read": "auth != null",
+      "$zone": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+      }
+    }
+  }
+}

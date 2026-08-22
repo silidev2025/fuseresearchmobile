@@ -439,6 +439,52 @@ function zoneVM(z, now) {
   };
 }
 
+function camMedia(v) {
+  var z = v.z;
+  if (v.off) return '';
+  if (z.clip) {
+    return '<video class="cam__img" src="' + esc(z.clip) + '"' +
+      (z.frame ? ' poster="' + esc(z.frame) + '"' : '') +
+      ' controls playsinline preload="none"></video>';
+  }
+  if (z.frame) {
+    return '<img class="cam__img" src="' + esc(z.frame) + '" alt="Latest processed frame from ' + esc(z.name) + '">';
+  }
+  return '';
+}
+
+function camThumb(v) {
+  var z = v.z;
+  if (v.off || !z.frame) return '';
+  return '<img class="cam__img" src="' + esc(z.frame) + '" alt="">';
+}
+
+function camNote(v) {
+  var z = v.z, conf = z.conf != null ? ' · ' + Math.round(z.conf * 100) + '% confidence' : '';
+  if (v.off) return 'No frame — this node is not reporting. The last image is hidden because it may be stale.';
+  if (z.clip) return 'Event clip from the Raspberry Pi vision pipeline' + conf + '. The poster is the latest still; press play for the recorded clip.';
+  if (z.frame) return 'Latest processed frame from the Raspberry Pi vision pipeline' + conf + '. Refreshes on each heartbeat.';
+  return 'Node is online but the vision pipeline has not published a frame yet.';
+}
+
+var ALL_SENSORS = ['smoke', 'flame', 'temp', 'gas', 'co'];
+function nodeSensors(z) {
+  return (z && Array.isArray(z.sensors) && z.sensors.length) ? z.sensors : ALL_SENSORS;
+}
+function hasSensor(z, id) { return nodeSensors(z).indexOf(id) !== -1; }
+function nodeActuators(z) {
+  if (z.actuators === false) return [];
+  return Array.isArray(z.actuators) ? z.actuators : ['fan', 'mist', 'valve'];
+}
+function hasActuator(z, id) { return nodeActuators(z).indexOf(id) !== -1; }
+function flameName(z) { return z.flameSource === 'vision' ? 'Flame (camera)' : SENSOR_NAMES.flame; }
+function flameNote(z) {
+  if (z.flameSource === 'vision') {
+    return z.r.flame ? 'Flame detected in the camera image by the OpenCV pipeline.' : 'No flame region found in the camera image.';
+  }
+  return z.r.flame ? 'IR/UV signature present on the digital pin, analog intensity sustained across samples.' : 'No IR/UV signature on either pin.';
+}
+
 var GOOGLE_G =
   '<svg viewBox="0 0 18 18" aria-hidden="true">' +
     '<path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"/>' +
@@ -1278,11 +1324,11 @@ function viewZones(vms) {
 function zoneCard(v) {
   var z = v.z, c = v.cls;
   var tiles = [
-    { k: 'SMOKE', v: z.r.smoke.toFixed(1),                u: '%obs',   lvl: c.L.smoke, pct: pctOf(z.r.smoke, 30) },
-    { k: 'FLAME', v: z.r.flame ? 'DET' : 'NONE',          u: 'ky-026', lvl: c.L.flame, pct: z.r.flame ? '100%' : '2%' },
-    { k: 'TEMP',  v: z.r.temp.toFixed(1),                 u: '°C',     lvl: c.L.temp,  pct: pctOf(z.r.temp, 90) },
-    { k: 'GAS',   v: String(Math.round(z.r.gas)),         u: 'adc',    lvl: c.L.gas,   pct: pctOf(z.r.gas, 4095) }
-  ];
+    { id: 'smoke', k: 'SMOKE', v: z.r.smoke.toFixed(1),                u: '%obs',   lvl: c.L.smoke, pct: pctOf(z.r.smoke, 30) },
+    { id: 'flame', k: 'FLAME', v: z.r.flame ? 'DET' : 'NONE',          u: z.flameSource === 'vision' ? 'camera' : 'ky-026', lvl: c.L.flame, pct: z.r.flame ? '100%' : '2%' },
+    { id: 'temp',  k: 'TEMP',  v: z.r.temp.toFixed(1),                 u: '°C',     lvl: c.L.temp,  pct: pctOf(z.r.temp, 90) },
+    { id: 'gas',   k: 'GAS',   v: String(Math.round(z.r.gas)),         u: 'adc',    lvl: c.L.gas,   pct: pctOf(z.r.gas, 4095) }
+  ].filter(function (t) { return hasSensor(z, t.id); });
 
   return '' +
   '<button class="zone ' + v.sv.cls + '" data-act="open-zone" data-arg="' + z.id + '" data-alert="' + (v.alert ? 1 : 0) + '">' +
@@ -1299,6 +1345,7 @@ function zoneCard(v) {
 
     '<span class="zone__bd">' +
       '<span class="cam">' +
+        camThumb(v) +
         '<span class="cam__bracket cam__bracket--tl"></span>' +
         '<span class="cam__bracket cam__bracket--br"></span>' +
         '<span class="cam__label"><span>' + v.camLabel + '</span></span>' +
@@ -1330,16 +1377,16 @@ function viewDetail(v, now) {
   var admin = isAdmin();
 
   var readings = [
-    { k: 'SMOKE', sensor: SENSOR_NAMES.smoke, v: z.r.smoke.toFixed(1),           u: '%obs', lvl: c.L.smoke, pct: pctOf(z.r.smoke, 30),  min: '0', max: '30',   th: thText('smoke') },
-    { k: 'FLAME', sensor: SENSOR_NAMES.flame, v: z.r.flame ? 'DETECTED' : 'NONE', u: '',    lvl: c.L.flame, pct: z.r.flame ? '100%' : '2%', min: 'clear', max: 'flame', th: 'digital + analog' },
-    { k: 'TEMP',  sensor: SENSOR_NAMES.temp,  v: z.r.temp.toFixed(1),            u: '°C',   lvl: c.L.temp,  pct: pctOf(z.r.temp, 90),   min: '0', max: '90',   th: thText('temp') },
-    { k: 'GAS',   sensor: SENSOR_NAMES.gas,   v: String(Math.round(z.r.gas)),    u: 'ADC',  lvl: c.L.gas,   pct: pctOf(z.r.gas, 4095),  min: '0', max: '4095', th: thText('gas') },
-    { k: 'CO',    sensor: SENSOR_NAMES.co,    v: String(Math.round(z.r.co)),     u: 'ppm',  lvl: c.L.co,    pct: pctOf(z.r.co, 400),    min: '0', max: '400',  th: thText('co') }
-  ];
+    { id: 'smoke', k: 'SMOKE', sensor: SENSOR_NAMES.smoke, v: z.r.smoke.toFixed(1),           u: '%obs', lvl: c.L.smoke, pct: pctOf(z.r.smoke, 30),  min: '0', max: '30',   th: thText('smoke') },
+    { id: 'flame', k: 'FLAME', sensor: flameName(z),       v: z.r.flame ? 'DETECTED' : 'NONE', u: '',    lvl: c.L.flame, pct: z.r.flame ? '100%' : '2%', min: 'clear', max: 'flame', th: z.flameSource === 'vision' ? 'vision' : 'digital + analog' },
+    { id: 'temp',  k: 'TEMP',  sensor: SENSOR_NAMES.temp,  v: z.r.temp.toFixed(1),            u: '°C',   lvl: c.L.temp,  pct: pctOf(z.r.temp, 90),   min: '0', max: '90',   th: thText('temp') },
+    { id: 'gas',   k: 'GAS',   sensor: SENSOR_NAMES.gas,   v: String(Math.round(z.r.gas)),    u: 'ADC',  lvl: c.L.gas,   pct: pctOf(z.r.gas, 4095),  min: '0', max: '4095', th: thText('gas') },
+    { id: 'co',    k: 'CO',    sensor: SENSOR_NAMES.co,    v: String(Math.round(z.r.co)),     u: 'ppm',  lvl: c.L.co,    pct: pctOf(z.r.co, 400),    min: '0', max: '400',  th: thText('co') }
+  ].filter(function (r) { return hasSensor(z, r.id); });
 
   var notes = {
     smoke: c.L.smoke === 0 ? 'Below the ' + TH.smoke[0] + ' %obs first threshold.' : 'Past ' + TH.smoke[c.L.smoke - 1] + ' %obs. Particulate load consistent with combustion.',
-    flame: z.r.flame ? 'IR/UV signature present on the digital pin, analog intensity sustained across samples.' : 'No IR/UV signature on either pin.',
+    flame: flameNote(z),
     temp:  c.L.temp === 0 ? 'Ambient, within the nominal band for this zone.' : 'Past ' + TH.temp[c.L.temp - 1] + ' °C. Rate of rise also above nominal.',
     gas:   c.L.gas === 0 ? 'MQ-2 raw ADC in the baseline band for this zone.' : 'Past ' + TH.gas[c.L.gas - 1] + ' ADC on the MQ-2 raw channel.',
     co:    c.L.co === 0 ? 'Below the ' + TH.co[0] + ' ppm first threshold.' : 'Past ' + TH.co[c.L.co - 1] + ' ppm. Fire byproduct present.'
@@ -1350,25 +1397,25 @@ function viewDetail(v, now) {
   };
 
   var actuators = [
-    { label: 'Exhaust fan',              driver: 'PWM · GPIO 25',     state: v.off ? 'UNKNOWN' : v.fan + '%',  pct: v.off ? '2%' : v.fan + '%',  cls: v.off ? 'sev-off' : (v.fan > 0 ? v.sv.cls : 'sev-off') },
-    { label: 'Water-mist suppression',   driver: 'PWM · GPIO 26',     state: v.off ? 'UNKNOWN' : (v.mist > 0 ? v.mist + '% · ACTIVE' : 'STANDBY'), pct: v.off ? '2%' : v.mist + '%', cls: v.off ? 'sev-off' : (v.mist > 0 ? 'sev-3' : 'sev-off') },
-    { label: 'Gas solenoid valve',       driver: 'DIGITAL · GPIO 27', state: v.off ? 'UNKNOWN' : v.valve,      pct: v.valve === 'CLOSED' ? '100%' : '18%', cls: v.off ? 'sev-off' : (v.valve === 'CLOSED' ? 'sev-2' : 'sev-0') }
-  ];
+    { id: 'fan',   label: 'Exhaust fan',              driver: 'PWM · GPIO 25',     state: v.off ? 'UNKNOWN' : v.fan + '%',  pct: v.off ? '2%' : v.fan + '%',  cls: v.off ? 'sev-off' : (v.fan > 0 ? v.sv.cls : 'sev-off') },
+    { id: 'mist',  label: 'Water-mist suppression',   driver: 'PWM · GPIO 26',     state: v.off ? 'UNKNOWN' : (v.mist > 0 ? v.mist + '% · ACTIVE' : 'STANDBY'), pct: v.off ? '2%' : v.mist + '%', cls: v.off ? 'sev-off' : (v.mist > 0 ? 'sev-3' : 'sev-off') },
+    { id: 'valve', label: 'Gas solenoid valve',       driver: 'DIGITAL · GPIO 27', state: v.off ? 'UNKNOWN' : v.valve,      pct: v.valve === 'CLOSED' ? '100%' : '18%', cls: v.off ? 'sev-off' : (v.valve === 'CLOSED' ? 'sev-2' : 'sev-0') }
+  ].filter(function (a) { return hasActuator(z, a.id); });
 
   var overrides = [
-    { kind: 'mist',    cls: 'sev-3',      icon: '◆', label: 'Trigger water mist',            note: 'Runs the mist line at 100% for 45s in ' + z.id + '.' },
-    { kind: 'exhaust', cls: 'sev-accent', icon: '≋', label: 'Run exhaust at 100%',           note: 'Forces the extraction fan to full PWM.' },
-    { kind: 'silence', cls: 'sev-1',      icon: '⃝', label: z.silenced ? 'Un-silence zone alert' : 'Silence active alert', note: z.silenced ? 'Restores audible and push alerting.' : 'Mutes sounder and repeat dispatches for 10 min.' },
-    { kind: 'reset',   cls: 'sev-accent', icon: '↺', label: 'Reset zone after false trigger', note: 'Clears actuators and returns the node to auto.' }
-  ];
+    { kind: 'mist',    need: 'mist',    cls: 'sev-3',      icon: '◆', label: 'Trigger water mist',            note: 'Runs the mist line at 100% for 45s in ' + z.id + '.' },
+    { kind: 'exhaust', need: 'fan',     cls: 'sev-accent', icon: '≋', label: 'Run exhaust at 100%',           note: 'Forces the extraction fan to full PWM.' },
+    { kind: 'silence', need: null,      cls: 'sev-1',      icon: '⃝', label: z.silenced ? 'Un-silence zone alert' : 'Silence active alert', note: z.silenced ? 'Restores audible and push alerting.' : 'Mutes sounder and repeat dispatches for 10 min.' },
+    { kind: 'reset',   need: null,      cls: 'sev-accent', icon: '↺', label: 'Reset zone after false trigger', note: 'Clears actuators and returns the node to auto.' }
+  ].filter(function (o) { return !o.need || hasActuator(z, o.need); });
 
   var telemetry = [
-    { k: 'Node MCU',        v: 'ESP32-WROOM-32', cls: '' },
-    { k: 'IP address',      v: z.ip, cls: '' },
-    { k: 'Wi-Fi signal',    v: z.rssi + ' dBm', cls: z.rssi < -80 ? 'sev-2' : '' },
+    { k: 'Node MCU',     v: z.mcu || 'ESP32-WROOM-32', cls: '' },
+    z.ip ? { k: 'IP address', v: z.ip, cls: '' } : null,
+    typeof z.rssi === 'number' ? { k: 'Wi-Fi signal', v: z.rssi + ' dBm', cls: z.rssi < -80 ? 'sev-2' : '' } : null,
     { k: 'Heartbeat', v: !z.lastSeen ? 'never received' : (v.off ? 'LOST · ' + rel(z.lastSeen, now) : rel(z.lastSeen, now)), cls: v.off ? 'sev-2' : 'sev-0' },
-    { k: 'Camera',          v: v.off ? 'unreachable' : 'OV2640 · armed', cls: v.off ? 'sev-2' : '' }
-  ];
+    { k: 'Camera',       v: v.off ? 'unreachable' : ((z.camModel || 'OV2640') + (z.frame ? ' · live' : ' · armed')), cls: v.off ? 'sev-2' : '' }
+  ].filter(Boolean);
 
   var zevents = S.events.filter(function (e) { return e.zone === z.id; }).slice(0, 6);
 
@@ -1392,13 +1439,14 @@ function viewDetail(v, now) {
           '<div class="detail__split">' +
             '<div>' +
               '<div class="cam cam--lg ' + v.sv.cls + '">' +
+                camMedia(v) +
                 '<span class="cam__bracket cam__bracket--tl"></span>' +
                 '<span class="cam__bracket cam__bracket--tr"></span>' +
                 '<span class="cam__bracket cam__bracket--bl"></span>' +
                 '<span class="cam__bracket cam__bracket--br"></span>' +
                 '<span class="cam__label"><span>' + v.camLabel + '</span><span style="color:var(--sev)">' + v.camState + '</span></span>' +
               '</div>' +
-              '<p class="mt-3" style="font-size:11px;line-height:1.5;color:var(--ink-3)">Camera still captured on trigger for visual verification. Placeholder frame; drop a real capture in later.</p>' +
+              '<p class="mt-3" style="font-size:11px;line-height:1.5;color:var(--ink-3)">' + esc(camNote(v)) + '</p>' +
             '</div>' +
             '<div class="stack gap-4">' +
               readings.map(function (r) {
@@ -1426,7 +1474,7 @@ function viewDetail(v, now) {
         '<section class="card">' +
           '<div class="card__hd"><h2 class="h-card">Why this severity</h2><span class="label label--xs">Fusion engine</span></div>' +
           '<div class="card__bd stack gap-3">' +
-            ['smoke', 'flame', 'temp', 'gas', 'co'].map(function (k) {
+            ALL_SENSORS.filter(function (k) { return hasSensor(z, k); }).map(function (k) {
               var lvl = c.L[k];
               var alert = lvl >= 1 && !v.off;
               var cls = lvl === 0 ? 'sev-0' : SEV[Math.min(3, lvl)].cls;
@@ -1443,7 +1491,7 @@ function viewDetail(v, now) {
               '<div>' +
                 '<p class="label" style="color:var(--sev);margin-bottom:3px">' + (v.off ? 'RULE H1 · HEARTBEAT TIMEOUT' : c.tag) + '</p>' +
                 '<p class="balance" style="font-size:13px;line-height:1.5;color:var(--ink-1)">' +
-                  (v.off ? 'No heartbeat from this ESP32 node for over 60 seconds. Severity cannot be computed, so the zone is held in OFFLINE rather than inheriting its last known state.' : c.text) +
+                  (v.off ? 'No heartbeat from this node for over 60 seconds. Severity cannot be computed, so the zone is held in OFFLINE rather than inheriting its last known state.' : c.text) +
                 '</p>' +
               '</div>' +
             '</div>' +
@@ -1469,7 +1517,7 @@ function viewDetail(v, now) {
 
       '<div class="detail__col">' +
 
-        '<section class="card">' +
+        (actuators.length ? '<section class="card">' +
           '<div class="card__hd"><h2 class="h-card">Actuators</h2></div>' +
           '<div class="card__bd stack gap-4">' +
             actuators.map(function (a) {
@@ -1485,7 +1533,7 @@ function viewDetail(v, now) {
               '</div>';
             }).join('') +
           '</div>' +
-        '</section>' +
+        '</section>' : '') +
 
         '<section class="card">' +
           '<div class="card__hd">' +
@@ -1639,7 +1687,7 @@ function viewCharts(now) {
 
   CHART_DATA = {};
 
-  var panels = PANELS.map(function (p, idx) {
+  var panels = PANELS.filter(function (p) { return hasSensor(cz, p.sensor); }).map(function (p, idx) {
     var vals = series(cz, p.sensor, rg.n, S.range);
     var times = vals.map(function (_, i) { return now - (rg.n - 1 - i) * rg.step; });
     var id = 'chart-' + p.sensor;
