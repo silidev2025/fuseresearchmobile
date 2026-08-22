@@ -1,17 +1,5 @@
 rules_version = '2';
 
-// FUSE — Storage rules for the Pi vision bridge.
-// Publish from the web repo (or `firebase deploy --only storage`).
-//
-// The Raspberry Pi writes with the Admin SDK, which BYPASSES these rules, so
-// there is deliberately no client write path. Signed-in console users may read.
-//
-// Caveat: a Firebase download URL (…?alt=media&token=…) is a capability URL —
-// anyone holding it can read the object regardless of the rule below. Those URLs
-// are only ever handed out through RTDB, which is itself auth-gated, so a user
-// must already be signed in to discover them. If that is not tight enough for
-// you, switch detector.py to time-limited signed URLs (see INTEGRATION.md).
-
 service firebase.storage {
   match /b/{bucket}/o {
 

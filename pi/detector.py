@@ -38,49 +38,32 @@ import time
 import uuid
 from urllib.parse import quote
 
-import cv2  # opencv-python
+import cv2
 import firebase_admin
 from firebase_admin import credentials, db, firestore, storage
 
-# --------------------------------------------------------------------------- #
-# Configuration                                                               #
-# --------------------------------------------------------------------------- #
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# Must match www/assets/js/firebase-config.js on the app side.
 DATABASE_URL   = "https://spendwise-dec03-default-rtdb.firebaseio.com"
 STORAGE_BUCKET = "spendwise-dec03.firebasestorage.app"
 SERVICE_KEY    = os.path.join(HERE, "serviceAccountKey.json")
 
-# This node's identity in the console. One camera == one "zone".
 ZONE_ID   = os.environ.get("FUSE_ZONE_ID", "cam-1")
 ZONE_NAME = os.environ.get("FUSE_ZONE_NAME", "Lobby Camera")
 ZONE_FLOOR = os.environ.get("FUSE_ZONE_FLOOR", "Ground")
 
-# What this node actually is, so the app only shows what's real (no phantom
-# sensors or actuators). Defaults match your rig: vision flame + MQ-2 gas +
-# temperature, no actuators. Adjust if a node differs.
 ZONE_MCU     = os.environ.get("FUSE_MCU", "ESP32-CAM + Raspberry Pi")
 ZONE_CAM     = os.environ.get("FUSE_CAM_MODEL", "OV2640")
 ZONE_SENSORS = [s for s in os.environ.get("FUSE_SENSORS", "flame,gas,temp").split(",") if s]
-FLAME_SOURCE = os.environ.get("FUSE_FLAME_SOURCE", "vision")   # "vision" or "ky-026"
+FLAME_SOURCE = os.environ.get("FUSE_FLAME_SOURCE", "vision")
 ZONE_ACTUATORS = [a for a in os.environ.get("FUSE_ACTUATORS", "").split(",") if a]
 
-# Where to read frames from. Swap for your ESP32-CAM stream, e.g.
-#   "http://192.168.1.50:81/stream"   (ESP32-CAM MJPEG)
-#   "rtsp://192.168.1.50:8554/cam"    (RTSP)
-#   0                                  (a USB camera on the Pi)
 FRAME_SOURCE = os.environ.get("FUSE_SOURCE", "http://192.168.1.50:81/stream")
 
-FRAME_INTERVAL_S = 2.0    # how often to upload the "latest" still (1-2 fps is plenty)
-HEARTBEAT_S      = 8.0    # how often to refresh ts so the node reads "online"
+FRAME_INTERVAL_S = 2.0
+HEARTBEAT_S      = 8.0
 JPEG_QUALITY     = 70
-CLIP_SECONDS     = 6      # length of the event clip recorded on a new detection
-
-# --------------------------------------------------------------------------- #
-# Fusion rules — ported verbatim from www/assets/js/app.js                    #
-# --------------------------------------------------------------------------- #
+CLIP_SECONDS     = 6
 
 TH = {"temp": [36, 48, 65], "gas": [1100, 1800, 2600],
       "smoke": [5, 10, 18], "co": [50, 120, 300]}
@@ -113,9 +96,9 @@ def classify(r):
     else:
         level = min(3, base + 1)
     if L["flame"] >= 2 and (L["smoke"] >= 1 or L["temp"] >= 1):
-        level = 3          # Rule F3 — flame corroborated
+        level = 3
     if elev >= 4:
-        level = 3          # Rule F4 — multi-sensor combustion
+        level = 3
     return level
 
 
@@ -131,10 +114,6 @@ def reading_summary(r):
         parts.append("vision nominal")
     return " · ".join(parts)
 
-
-# --------------------------------------------------------------------------- #
-# Firebase                                                                    #
-# --------------------------------------------------------------------------- #
 
 def init_firebase():
     if not os.path.exists(SERVICE_KEY):
@@ -204,14 +183,14 @@ def run_detection(frame):
       flame + gas over 1100 (or temp>36) .. CRITICAL   (corroborated)
       gas/temp elevated, no flame ......... CAUTION / WARNING
 
-    The stub just runs end-to-end. DELETE it and call your real detector.
+    The stub just runs end-to-end. DELETE it and call your real detector, e.g.:
+      flame, boxes, confidence = your_model(frame)
+      reading["flame"] = flame
+      annotated = draw(frame, boxes)
     """
     annotated = frame
     reading = {"flame": False}
     confidence = None
-    # e.g.  flame, boxes, confidence = your_model(frame)
-    #       reading["flame"] = flame
-    #       annotated = draw(frame, boxes)
     return reading, annotated, confidence
 
 
@@ -226,10 +205,6 @@ def read_sensors():
     """
     return {"gas": 0.0, "temp": 0.0}
 
-
-# --------------------------------------------------------------------------- #
-# Main loop                                                                    #
-# --------------------------------------------------------------------------- #
 
 def record_clip(cap, bucket, seconds):
     """Grab a few seconds and upload as MP4. Returns the clip URL, or None."""
@@ -255,8 +230,6 @@ def main():
     zone_ref, fs, bucket = init_firebase()
     cap = open_source()
 
-    # Publish this node's identity + capabilities once. RTDB merges, so the app
-    # knows what hardware is real before the first reading lands.
     zone_ref.update({
         "name": ZONE_NAME, "floor": ZONE_FLOOR, "ip": local_ip(),
         "mcu": ZONE_MCU, "camModel": ZONE_CAM,
@@ -292,7 +265,6 @@ def main():
                         buf.tobytes(), "image/jpeg")
                 last_frame_up = t
 
-            # Escalation: record a clip and log an Alerts event.
             clip_url = None
             if level > last_level:
                 clip_url = record_clip(cap, bucket, CLIP_SECONDS)

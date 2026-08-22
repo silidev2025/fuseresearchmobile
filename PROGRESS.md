@@ -33,8 +33,11 @@ no actuators.
   the sensors a node declares, hides absent actuators/overrides, labels flame as
   camera-detected. Legacy five-sensor nodes are unaffected.
 - `styles.css` adds `.cam__img`.
-- **APK rebuilt** with all changes and refreshed at `dist/fuse-debug.apk`
-  (+ `.sha256`). Built with JDK 21; debug-signed (sideload only, not for Play).
+- **APKs rebuilt** with all changes (JDK 21) and committed under `dist/`:
+  - `dist/fuse-debug.apk` — debug-signed, installs by sideload.
+  - `dist/fuse-release-unsigned.apk` — release build, **unsigned** (no keystore
+    committed, per the README). Must be signed before it will install; see below.
+  - each with a matching `.sha256`.
 
 **Raspberry Pi bridge (new, in `pi/`)**
 - `detector.py` — uploads frames/clips, writes the RTDB verdict + heartbeat, logs
@@ -57,6 +60,12 @@ no actuators.
    confirm the camera zone appears with a live frame and escalates on flame.
 3. Optional: `smoke` from vision (add to `FUSE_SENSORS`), signed URLs instead of
    token URLs, a systemd unit so the bridge auto-starts.
+4. To make `dist/fuse-release-unsigned.apk` installable, sign it with your own
+   keystore (never commit it):
+   ```
+   keytool -genkey -v -keystore fuse-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias fuse
+   "%LOCALAPPDATA%\Android\Sdk\build-tools\36.0.0\apksigner" sign --ks fuse-release.jks --out dist/fuse-release.apk dist/fuse-release-unsigned.apk
+   ```
 
 ---
 

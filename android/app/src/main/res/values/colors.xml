@@ -1,22 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The brand palette, taken from the design-system tokens in
-     www/assets/css/styles.css so the native chrome and the WebView inside it
-     agree rather than meeting at a visible seam.
-
-       accent   #416faf   interaction and chart data, nothing else
-       ink-1    #17191c   brand primary charcoal
-       surface  #ffffff   cards, sidebar, topbar
-
-     (Those are CSS custom properties; their leading double hyphen is omitted
-     here because XML comments may not contain it.)
-
-     Without this file they resolve to Capacitor's defaults, which are purple. -->
 <resources>
     <color name="colorPrimary">#416FAF</color>
     <color name="colorPrimaryDark">#17191C</color>
     <color name="colorAccent">#416FAF</color>
-
-    <!-- The plane the console itself paints. The system bars use it so the app
-         does not sit in a dark frame around a white screen. -->
     <color name="fuseSurface">#FFFFFF</color>
 </resources>
