@@ -59,13 +59,15 @@ no actuators.
    Run: `FUSE_ZONE_ID=cam-1 FUSE_ZONE_NAME="Lobby Camera" python3 detector.py`
 2. **Install the new APK** on the phone and sign in with an **operator** account;
    confirm the camera zone appears with a live frame and escalates on flame.
-3. Optional: `smoke` from vision (add to `FUSE_SENSORS`), signed URLs instead of
-   token URLs, a systemd unit so the bridge auto-starts.
+3. Auto-start on the Pi: install `pi/fuse-bridge.service` (see INTEGRATION.md,
+   "Auto-start on boot (systemd)").
 4. **Back up the release keystore.** Release signing is wired: `build.gradle`
    reads `android/keystore.properties` → `android/fuse-release.jks` (both
    untracked/gitignored, on this machine only). Save the `.jks` and its password
    somewhere safe — losing them means no future signed updates under the same
    identity.
+5. Optional: `smoke` from vision (add to `FUSE_SENSORS`), signed URLs instead of
+   token URLs.
 
 ---
 

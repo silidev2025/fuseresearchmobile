@@ -18,6 +18,7 @@ local.properties
 # It grants admin access to the Firebase project. Never commit it.
 pi/serviceAccountKey.json
 pi/*.serviceaccount.json
+pi/fuse-bridge.env
 pi/.venv/
 pi/__pycache__/
 

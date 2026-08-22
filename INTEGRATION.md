@@ -129,8 +129,34 @@ It prints `FUSE bridge up …`, uploads a frame every ~2s, heartbeats every ~8s,
 and logs an Alerts event whenever the fused severity changes. One camera = one
 `FUSE_ZONE_ID`; run one process per camera.
 
-To keep it running across reboots, wrap it in a systemd service (ask and I'll
-write the unit file).
+### Auto-start on boot (systemd)
+
+`pi/fuse-bridge.service` runs the bridge as a service that starts at boot and
+restarts on failure. Assuming the repo is at `/home/pi/fuseresearchmobile` with a
+venv at `pi/.venv` (edit the paths/`User` in the unit if not):
+
+```bash
+cd ~/fuseresearchmobile/pi
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+cp fuse-bridge.env.example fuse-bridge.env   # per-node config (zone, source, sensors)
+nano fuse-bridge.env
+
+sudo cp fuse-bridge.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now fuse-bridge
+
+systemctl status fuse-bridge      # is it running?
+journalctl -u fuse-bridge -f      # live logs
+```
+
+Notes:
+- Edit the unit if your user isn't `pi` or the repo lives elsewhere.
+- USB camera / analog sensors need group access, e.g.
+  `sudo usermod -aG video,spi,gpio pi` then reboot.
+- After editing the unit: `sudo systemctl daemon-reload && sudo systemctl restart fuse-bridge`.
+- One service per camera: copy the unit to a second name (e.g. `fuse-bridge-cam2.service`)
+  with its own env file and `FUSE_ZONE_ID`.
 
 ### 4. Rebuild the app so the changes ship in the APK
 Needs JDK 17+ and the Android SDK (per the README).

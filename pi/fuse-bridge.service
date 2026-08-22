@@ -1,0 +1,20 @@
+[Unit]
+Description=FUSE Raspberry Pi vision bridge
+Documentation=https://github.com/silidev2025/fuseresearchmobile
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/fuseresearchmobile/pi
+EnvironmentFile=-/home/pi/fuseresearchmobile/pi/fuse-bridge.env
+ExecStart=/home/pi/fuseresearchmobile/pi/.venv/bin/python /home/pi/fuseresearchmobile/pi/detector.py
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=0
+SyslogIdentifier=fuse-bridge
+
+[Install]
+WantedBy=multi-user.target
