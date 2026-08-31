@@ -425,6 +425,9 @@ function zoneVM(z, now) {
   var fan   = z.ovFan   != null ? z.ovFan   : [0, 40, 70, 100][Math.max(0, z.level)];
   var mist  = z.ovMist  != null ? z.ovMist  : [0, 0, 35, 100][Math.max(0, z.level)];
   var valve = z.ovValve != null ? z.ovValve : (z.level >= 2 ? 'CLOSED' : 'OPEN');
+  var actMap = { fan: 'FAN ' + fan + '%', mist: 'MIST ' + mist + '%', valve: 'VALVE ' + valve };
+  var act = off ? 'NODE UNREACHABLE'
+    : nodeActuators(z).map(function (a) { return actMap[a]; }).filter(Boolean).join(' · ');
   return {
     z: z, level: level, off: off, sv: sv, cls: c,
     fan: fan, mist: mist, valve: valve,
@@ -435,7 +438,7 @@ function zoneVM(z, now) {
     seen: !z.lastSeen ? 'NO HEARTBEAT YET'
       : off ? 'HEARTBEAT LOST · ' + rel(z.lastSeen, now)
       : 'last seen ' + rel(z.lastSeen, now),
-    act: off ? 'NODE UNREACHABLE' : 'FAN ' + fan + '% · MIST ' + mist + '% · VALVE ' + valve
+    act: act
   };
 }
 
@@ -462,9 +465,9 @@ function camThumb(v) {
 function camNote(v) {
   var z = v.z, conf = z.conf != null ? ' · ' + Math.round(z.conf * 100) + '% confidence' : '';
   if (v.off) return 'No frame — this node is not reporting. The last image is hidden because it may be stale.';
-  if (z.clip) return 'Event clip from the Raspberry Pi vision pipeline' + conf + '. The poster is the latest still; press play for the recorded clip.';
-  if (z.frame) return 'Latest processed frame from the Raspberry Pi vision pipeline' + conf + '. Refreshes on each heartbeat.';
-  return 'Node is online but the vision pipeline has not published a frame yet.';
+  if (z.clip) return 'Event clip from the node camera' + conf + '. The poster is the latest still; press play for the recorded clip.';
+  if (z.frame) return 'Latest processed frame from the node camera' + conf + '. Refreshes on each heartbeat.';
+  return 'Node is online but the camera has not published a frame yet.';
 }
 
 var ALL_SENSORS = ['smoke', 'flame', 'temp', 'gas', 'co'];
@@ -477,6 +480,7 @@ function nodeActuators(z) {
   return Array.isArray(z.actuators) ? z.actuators : ['fan', 'mist', 'valve'];
 }
 function hasActuator(z, id) { return nodeActuators(z).indexOf(id) !== -1; }
+function hasCam(z) { return !!(z && z.camModel); }
 function flameName(z) { return z.flameSource === 'vision' ? 'Flame (camera)' : SENSOR_NAMES.flame; }
 function flameNote(z) {
   if (z.flameSource === 'vision') {
@@ -1344,12 +1348,13 @@ function zoneCard(v) {
     '</span>' +
 
     '<span class="zone__bd">' +
-      '<span class="cam">' +
-        camThumb(v) +
-        '<span class="cam__bracket cam__bracket--tl"></span>' +
-        '<span class="cam__bracket cam__bracket--br"></span>' +
-        '<span class="cam__label"><span>' + v.camLabel + '</span></span>' +
-      '</span>' +
+      (hasCam(z) ?
+        '<span class="cam">' +
+          camThumb(v) +
+          '<span class="cam__bracket cam__bracket--tl"></span>' +
+          '<span class="cam__bracket cam__bracket--br"></span>' +
+          '<span class="cam__label"><span>' + v.camLabel + '</span></span>' +
+        '</span>' : '') +
       '<span class="tiles">' +
         tiles.map(function (t) {
           var alert = !v.off && t.lvl >= 1;
@@ -1414,7 +1419,7 @@ function viewDetail(v, now) {
     z.ip ? { k: 'IP address', v: z.ip, cls: '' } : null,
     typeof z.rssi === 'number' ? { k: 'Wi-Fi signal', v: z.rssi + ' dBm', cls: z.rssi < -80 ? 'sev-2' : '' } : null,
     { k: 'Heartbeat', v: !z.lastSeen ? 'never received' : (v.off ? 'LOST · ' + rel(z.lastSeen, now) : rel(z.lastSeen, now)), cls: v.off ? 'sev-2' : 'sev-0' },
-    { k: 'Camera',       v: v.off ? 'unreachable' : ((z.camModel || 'OV2640') + (z.frame ? ' · live' : ' · armed')), cls: v.off ? 'sev-2' : '' }
+    hasCam(z) ? { k: 'Camera',       v: v.off ? 'unreachable' : ((z.camModel || 'OV2640') + (z.frame ? ' · live' : ' · armed')), cls: v.off ? 'sev-2' : '' } : null
   ].filter(Boolean);
 
   var zevents = S.events.filter(function (e) { return e.zone === z.id; }).slice(0, 6);
@@ -1436,18 +1441,19 @@ function viewDetail(v, now) {
             '</div>' +
             '<span class="pill' + (v.level === 3 ? ' is-live' : '') + '" style="padding:7px 15px 7px 11px;font-size:12px">' + sevMark(v.level, 15) + v.sv.key + '</span>' +
           '</div>' +
-          '<div class="detail__split">' +
-            '<div>' +
-              '<div class="cam cam--lg ' + v.sv.cls + '">' +
-                camMedia(v) +
-                '<span class="cam__bracket cam__bracket--tl"></span>' +
-                '<span class="cam__bracket cam__bracket--tr"></span>' +
-                '<span class="cam__bracket cam__bracket--bl"></span>' +
-                '<span class="cam__bracket cam__bracket--br"></span>' +
-                '<span class="cam__label"><span>' + v.camLabel + '</span><span style="color:var(--sev)">' + v.camState + '</span></span>' +
-              '</div>' +
-              '<p class="mt-3" style="font-size:11px;line-height:1.5;color:var(--ink-3)">' + esc(camNote(v)) + '</p>' +
-            '</div>' +
+          '<div class="detail__split' + (hasCam(z) ? '' : ' detail__split--full') + '">' +
+            (hasCam(z) ?
+              '<div>' +
+                '<div class="cam cam--lg ' + v.sv.cls + '">' +
+                  camMedia(v) +
+                  '<span class="cam__bracket cam__bracket--tl"></span>' +
+                  '<span class="cam__bracket cam__bracket--tr"></span>' +
+                  '<span class="cam__bracket cam__bracket--bl"></span>' +
+                  '<span class="cam__bracket cam__bracket--br"></span>' +
+                  '<span class="cam__label"><span>' + v.camLabel + '</span><span style="color:var(--sev)">' + v.camState + '</span></span>' +
+                '</div>' +
+                '<p class="mt-3" style="font-size:11px;line-height:1.5;color:var(--ink-3)">' + esc(camNote(v)) + '</p>' +
+              '</div>' : '') +
             '<div class="stack gap-4">' +
               readings.map(function (r) {
                 var alert = !v.off && r.lvl >= 1;

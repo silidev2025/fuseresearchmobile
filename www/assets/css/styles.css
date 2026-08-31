@@ -745,6 +745,7 @@ pre { font-family: var(--sans); }
 }
 .detail__name { font-size: 21px; font-weight: 600; letter-spacing: -0.015em; margin-top: 2px; }
 .detail__split { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: var(--s-5); padding: var(--s-5); }
+.detail__split--full { grid-template-columns: minmax(0, 1fr); }
 
 .reading { display: flex; flex-direction: column; gap: 5px; }
 .reading__top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
