@@ -145,6 +145,7 @@ async function firebaseBackend() {
             name: z.name || id,
             floor: z.floor || '',
             ip: z.ip || '',
+            camIp: z.camIp || '',
             rssi: typeof z.rssi === 'number' ? z.rssi : null,
             lastSeen: z.ts || 0,
             r: {

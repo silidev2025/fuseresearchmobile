@@ -138,13 +138,27 @@ Inherited from the web console, and unchanged by packaging it:
 
 ## The nodes
 
-The ESP32 firmware, wiring, bill of materials and calibration notes live in
+Wiring, bill of materials and calibration notes live in
 [`hardware/`](https://github.com/manciafrancisdave/fuseresearch/tree/main/hardware)
-in the web repository.
+in the web repository. Two sketches live here, in `hardware/`, because the app is
+the only consumer of what they publish:
 
-This app does not talk to the nodes directly. It reads what they publish to
-Realtime Database, exactly as the web console does. The nodes fuse their own
-readings and drive their own sounders without waiting for either.
+- `hardware/fuse_node/` — ESP32-WROOM-32 sensor node. MQ-2 gas and a DS18B20
+  probe, publishing to `zones/<zone>/r/*` as multi-path keys so it writes only
+  its own fields.
+- `hardware/fuse_cam/` — ESP32-CAM. Colour-threshold flame detection with the
+  verdict burned into an MJPEG stream it serves on the local network, published
+  to `zones/<zone>/r/flame` with a still uploaded to Storage.
+
+For the flame channel the app reads `r/flame` and so does the sensor node, which
+folds it into its own fusion so the local sounder sees a camera-only fire. That
+readback is TTL'd: if the camera's verdict goes stale the node discards it rather
+than latching on it.
+
+This app does not talk to the sensor node directly. It reads what the node
+publishes to Realtime Database, exactly as the web console does. It *does* talk
+to the camera directly, but only for the live stream, and only on the local
+network — off that network the tile falls back to the last still from Storage.
 
 ## Not life-safety equipment
 

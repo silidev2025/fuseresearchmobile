@@ -1,73 +1,126 @@
-# Progress — Raspberry Pi vision → FUSE app
+# Progress — ESP32-CAM vision → FUSE app
 
-_Last updated: 2026-08-23_
+_Last updated: 2026-09-03_
 
-Wiring the working **ESP32-CAM → Raspberry Pi + OpenCV** pipeline into the FUSE
-mobile app so the processed video and its fire verdict show up on the dashboard.
-Transport chosen: **Firebase Storage** (frames/clips) + **RTDB** (verdict), so it
-reuses the same project and auth as the rest of the app. Full how-to lives in
-[`INTEGRATION.md`](INTEGRATION.md).
+The ESP32-CAM now talks to Firebase directly. **There is no Raspberry Pi.** The
+camera runs its own colour-threshold flame detection, serves an MJPEG stream on
+the local network, and publishes its verdict to RTDB as a third fusion channel
+alongside the sensor node's gas and temperature.
 
-Rig confirmed by the owner: **camera flame (vision) + MQ-2 gas + temperature**,
-no actuators.
+Transport: **RTDB** for the verdict, the camera's IP and the still's URL;
+**Firebase Storage** for the still itself. Same project, same auth, same rules as
+the rest of the app.
+
+---
+
+## Architecture
+
+| Board | Publishes | Reads |
+|---|---|---|
+| ESP32-WROOM-32 (`hardware/fuse_node/`) | `ts`, `rssi`, `ip`, `r/temp`, `r/gas`, `r/smoke`, `r/co` | `ov`, `silenced`, `r/flame` |
+| ESP32-CAM (`hardware/fuse_cam/`) | `camIp`, `r/flame`, `frame` | — |
+
+Both sign in over the Firebase Auth REST API as `node-z01@fuse.local` and refresh
+the token five minutes before expiry. Neither uses a Firebase library.
+
+The two boards no longer collide. The node writes multi-path keys (`"r/temp"`
+rather than a nested `{"r": {...}}` object), so a heartbeat touches only its own
+fields instead of replacing the whole `r` node and erasing the camera's verdict
+every five seconds.
+
+The camera keeps the MJPEG stream off the network path entirely: a vision task
+detects and encodes, the HTTP handler serves the most recent encoded frame, and a
+third task on the other core does all the Firebase work. The stream cannot stall
+behind a TLS handshake because it never makes one.
 
 ---
 
 ## Done ✅
 
-**Firebase (project `spendwise-dec03`)**
-- Storage enabled; `firebase/storage.rules` published in the console **and**
-  deployed via the CLI (`firebase deploy --only storage`).
-- Realtime Database rules: reviewed — **no change needed** (read already granted;
-  the Pi writes with the Admin SDK, which bypasses rules).
-- Firestore: no change needed (console already reads `events`; Pi writes via Admin SDK).
-- Firebase CLI installed, logged in as `francismancia334@gmail.com`, project wired
-  (`firebase.json` + `.firebaserc`, Storage only — RTDB left untouched on purpose).
-- Service-account key saved at `pi/serviceAccountKey.json` (gitignored, validated).
+**Firmware**
+- `hardware/fuse_node/fuse_node.ino` — `publish()` writes multi-path keys and no
+  longer writes `r/flame`. `pollOverrides()` reads `r/flame` back so the local
+  sounder sees a camera-only fire; the value is discarded after 30s without a
+  successful read, so a dropped link cannot latch the buzzer on.
+- `hardware/fuse_cam/fuse_cam.ino` — new. Auth, detection, overlay, MJPEG server,
+  `camIp` publish, `r/flame` single-key patch, JPEG upload to Storage and `frame`
+  URL write.
 
-**App (web assets in `www/`, wrapped by Capacitor)**
-- `backend.js` forwards `frame`, `clip`, `conf`, and the capability fields
-  (`mcu`, `camModel`, `sensors`, `flameSource`, `actuators`).
-- `app.js` renders the real frame (`<img>`) / clip (`<video>`) in the zone detail
-  and a live thumbnail in the zone cards; UI is **capability-driven** — shows only
-  the sensors a node declares, hides absent actuators/overrides, labels flame as
-  camera-detected. Legacy five-sensor nodes are unaffected.
-- `styles.css` adds `.cam__img`.
-- **APKs rebuilt** with all changes (JDK 21) and committed under `dist/`:
-  - `dist/fuse-debug.apk` — debug-signed, installs by sideload.
-  - `dist/fuse-release.apk` — release build, **signed** with the project keystore
-    (`android/fuse-release.jks`, alias `fuse`) via `android/keystore.properties`;
-    verified with `apksigner` (exit 0).
-  - each with a matching `.sha256`.
+**Firebase**
+- `firebase/storage.rules` — signed-in devices may write `frames/<zone>/`, capped
+  at 2 MB and `image/jpeg`. Reads still require auth; `clips/` and everything
+  else still deny.
+- `firebase/database.rules.snippet.json` — adds `camIp`, `frame` (device-writable)
+  and `camModel` (admin-only). Still a snippet to merge into the web repo.
 
-**Raspberry Pi bridge (new, in `pi/`)**
-- `detector.py` — uploads frames/clips, writes the RTDB verdict + heartbeat, logs
-  a Firestore `events` row on each severity change, and declares node capabilities.
-- Fusion thresholds/rules ported 1:1 from `app.js` so Pi and app agree.
-- `requirements.txt` for `firebase-admin` + `opencv-python`.
+**App**
+- `backend.js` forwards `camIp`.
+- `app.js` renders the live MJPEG when `camIp` is set, falls back to the Storage
+  still on image error, and says in the caption that the stream is LAN-only.
+- `capacitor.config.json` allows mixed content; `network_security_config.xml`
+  permits cleartext to the camera's pinned address only.
+
+**Removed**
+- `pi/` and `INTEGRATION.md`. The Pi bridge, its service-account key and its
+  systemd unit are gone.
 
 ---
 
 ## Pending ⏳ (your side)
 
-1. **On the Raspberry Pi** — copy `pi/detector.py`, `pi/requirements.txt`, and
-   `pi/serviceAccountKey.json` over (keep the key secret). `pip install -r
-   requirements.txt`. Then fill the three plug-in spots in `detector.py`:
-   - `open_source()` → your ESP32-CAM feed
-   - `run_detection()` → your OpenCV flame verdict (`{"flame": bool}`)
-   - `read_sensors()` → MQ-2 `gas` + `temp`
-   Run: `FUSE_ZONE_ID=cam-1 FUSE_ZONE_NAME="Lobby Camera" python3 detector.py`
-2. **Install the new APK** on the phone and sign in with an **operator** account;
-   confirm the camera zone appears with a live frame and escalates on flame.
-3. Auto-start on the Pi: install `pi/fuse-bridge.service` (see INTEGRATION.md,
-   "Auto-start on boot (systemd)").
-4. **Back up the release keystore.** Release signing is wired: `build.gradle`
-   reads `android/keystore.properties` → `android/fuse-release.jks` (both
-   untracked/gitignored, on this machine only). Save the `.jks` and its password
-   somewhere safe — losing them means no future signed updates under the same
-   identity.
-5. Optional: `smoke` from vision (add to `FUSE_SENSORS`), signed URLs instead of
-   token URLs.
+1. **Set `camModel` once**, by hand, at `zones/Z-01/camModel` in the Firebase
+   console, signed in as an admin — e.g. `ESP32-CAM OV2640`. It is admin-only by
+   design and the camera cannot write it. **Until it exists the camera tile does
+   not render at all**, because `hasCam(z)` tests `z.camModel`.
+2. **Merge the RTDB snippet** into `database.rules.json` in the web repo and
+   deploy from there. Until then every camera write is rejected by
+   `"$other": {".validate": false}`.
+3. **Deploy the Storage rules**: `firebase deploy --only storage`.
+4. **Give the ESP32-CAM a static DHCP lease** matching the address pinned in
+   `android/app/src/main/res/xml/network_security_config.xml` (currently
+   `192.168.1.50`). Android's network security config cannot express a CIDR
+   range, so the address is pinned rather than the subnet.
+5. **Tune the flame thresholds** in `fuse_cam.ino` — `FLAME_R_MIN`,
+   `FLAME_RG_DIFF`, `FLAME_GB_DIFF`, `FLAME_PIXEL_RATIO`. The committed values
+   are untested starting points. Watch the `FUSE-CAM: verdict` serial lines
+   against a real flame and real room lighting; `FLAME_PIXEL_RATIO` is the one
+   that governs false positives.
+6. **Check the RGB565 byte order** on your board. `detectFlame()` reads
+   big-endian. If detection behaves as though red and blue are swapped, swap the
+   two indices in that one line.
+7. **Rebuild and install the APK**: `npx cap sync android`, then
+   `./gradlew assembleDebug` with JDK 21.
+8. **Back up the release keystore** — `android/fuse-release.jks` and
+   `android/keystore.properties`, both untracked and on this machine only.
+
+---
+
+## Flashing the ESP32-CAM
+
+The camera is an AI-Thinker ESP32-CAM on an **ESP32-CAM-MB** baseboard. The MB is
+only a CH340 USB-serial programmer — it does not change the pin map, so
+`hardware/fuse_cam/fuse_cam.ino` targets the AI-Thinker pinout as written.
+
+| Setting | Value |
+|---|---|
+| Board | AI Thinker ESP32-CAM |
+| Partition Scheme | Huge APP (3MB No OTA/1MB SPIFFS) |
+| PSRAM | Enabled |
+| Upload Speed | 115200 |
+
+Partition scheme is not optional: the default app partition is too small for the
+camera driver plus `WiFiClientSecure`, and the build fails with `Sketch too big`.
+PSRAM is not optional either — the sketch holds a QVGA RGB565 frame with
+`fb_count 2` and uses `ps_malloc`; without it `esp_camera_init` fails and the
+board reboots in a loop.
+
+With the MB there is no IO0-to-GND jumper. If upload hangs on `Connecting...`,
+hold BOOT, tap RST, release BOOT.
+
+`Brownout detector was triggered` in the serial log is a power problem, not a
+firmware one — camera plus WiFi plus a TLS handshake is a real current spike. Use
+a 5V/2A supply or feed 5V directly. Do not disable the brownout detector; it
+turns a clear failure into random reboots.
 
 ---
 
@@ -89,5 +142,4 @@ cd android
 
 Not committed (generated/secret): `node_modules/`, `android/build/`,
 `android/local.properties`, `android/fuse-release.jks`,
-`android/keystore.properties`, `pi/serviceAccountKey.json`, the synced
-`android/app/src/main/assets/`.
+`android/keystore.properties`, the synced `android/app/src/main/assets/`.

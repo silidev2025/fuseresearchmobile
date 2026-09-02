@@ -442,31 +442,41 @@ function zoneVM(z, now) {
   };
 }
 
+function camStream(z) { return z && z.camIp ? 'http://' + z.camIp + '/stream' : ''; }
+
+function camImg(src, fb, alt) {
+  return '<img class="cam__img" src="' + esc(src) + '"' +
+    (fb ? ' data-camfb="' + esc(fb) + '"' : '') +
+    ' alt="' + esc(alt) + '">';
+}
+
 function camMedia(v) {
-  var z = v.z;
+  var z = v.z, stream = camStream(z);
   if (v.off) return '';
   if (z.clip) {
     return '<video class="cam__img" src="' + esc(z.clip) + '"' +
       (z.frame ? ' poster="' + esc(z.frame) + '"' : '') +
       ' controls playsinline preload="none"></video>';
   }
-  if (z.frame) {
-    return '<img class="cam__img" src="' + esc(z.frame) + '" alt="Latest processed frame from ' + esc(z.name) + '">';
-  }
+  if (stream) return camImg(stream, z.frame, 'Live stream from ' + z.name);
+  if (z.frame) return camImg(z.frame, '', 'Last frame from ' + z.name);
   return '';
 }
 
 function camThumb(v) {
-  var z = v.z;
-  if (v.off || !z.frame) return '';
-  return '<img class="cam__img" src="' + esc(z.frame) + '" alt="">';
+  var z = v.z, stream = camStream(z);
+  if (v.off) return '';
+  if (stream) return camImg(stream, z.frame, '');
+  if (z.frame) return camImg(z.frame, '', '');
+  return '';
 }
 
 function camNote(v) {
   var z = v.z, conf = z.conf != null ? ' · ' + Math.round(z.conf * 100) + '% confidence' : '';
   if (v.off) return 'No frame — this node is not reporting. The last image is hidden because it may be stale.';
   if (z.clip) return 'Event clip from the node camera' + conf + '. The poster is the latest still; press play for the recorded clip.';
-  if (z.frame) return 'Latest processed frame from the node camera' + conf + '. Refreshes on each heartbeat.';
+  if (z.camIp) return 'Live MJPEG from the camera at ' + z.camIp + conf + '. The stream is reachable only on the camera\'s own Wi-Fi; elsewhere this falls back to the last uploaded frame.';
+  if (z.frame) return 'Last frame uploaded by the camera' + conf + '. Refreshes on each verdict change.';
   return 'Node is online but the camera has not published a frame yet.';
 }
 
@@ -484,7 +494,7 @@ function hasCam(z) { return !!(z && z.camModel); }
 function flameName(z) { return z.flameSource === 'vision' ? 'Flame (camera)' : SENSOR_NAMES.flame; }
 function flameNote(z) {
   if (z.flameSource === 'vision') {
-    return z.r.flame ? 'Flame detected in the camera image by the OpenCV pipeline.' : 'No flame region found in the camera image.';
+    return z.r.flame ? 'Flame detected in the camera image by the on-board colour-threshold detector.' : 'No flame region found in the camera image.';
   }
   return z.r.flame ? 'IR/UV signature present on the digital pin, analog intensity sustained across samples.' : 'No IR/UV signature on either pin.';
 }
@@ -2319,6 +2329,14 @@ document.addEventListener('pointerout', function (e) {
     if (el) clearCrosshair(el);
   });
 });
+
+document.addEventListener('error', function (e) {
+  var el = e.target;
+  if (!el || !el.classList || !el.classList.contains('cam__img')) return;
+  var fb = el.getAttribute('data-camfb');
+  if (fb) { el.removeAttribute('data-camfb'); el.src = fb; return; }
+  el.remove();
+}, true);
 
 document.addEventListener('click', function (e) {
   if (!S) return;
