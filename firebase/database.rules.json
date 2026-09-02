@@ -1,0 +1,76 @@
+{
+  "rules": {
+    "zones": {
+      ".read": "auth != null",
+      "$zone": {
+        "r": {
+          ".write": "auth != null && (root.child('devices').child(auth.uid).val() === $zone || root.child('devices').child(auth.uid).val() === '*')",
+          "temp":  { ".validate": "newData.isNumber() && newData.val() >= -40 && newData.val() <= 200" },
+          "gas":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 4095" },
+          "smoke": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "co":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2000" },
+          "flame": { ".validate": "newData.isNumber() || newData.isBoolean()" },
+          "$other": { ".validate": false }
+        },
+        "ts": {
+          ".write": "auth != null && (root.child('devices').child(auth.uid).val() === $zone || root.child('devices').child(auth.uid).val() === '*')",
+          ".validate": "newData.isNumber()"
+        },
+        "rssi": {
+          ".write": "auth != null && (root.child('devices').child(auth.uid).val() === $zone || root.child('devices').child(auth.uid).val() === '*')",
+          ".validate": "newData.isNumber()"
+        },
+        "ip": {
+          ".write": "auth != null && (root.child('devices').child(auth.uid).val() === $zone || root.child('devices').child(auth.uid).val() === '*')",
+          ".validate": "newData.isString()"
+        },
+        "camIp": {
+          ".write": "auth != null && (root.child('devices').child(auth.uid).val() === $zone || root.child('devices').child(auth.uid).val() === '*')",
+          ".validate": "newData.isString() && newData.val().length <= 45"
+        },
+        "frame": {
+          ".write": "auth != null && (root.child('devices').child(auth.uid).val() === $zone || root.child('devices').child(auth.uid).val() === '*')",
+          ".validate": "newData.isString() && newData.val().length <= 500"
+        },
+        "name": {
+          ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "floor": {
+          ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+          ".validate": "newData.isString() && newData.val().length <= 30"
+        },
+        "mcu": {
+          ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "camModel": {
+          ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "sensors": {
+          ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+          "$i": { ".validate": "newData.isString()" }
+        },
+        "actuators": {
+          ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+          "$i": { ".validate": "newData.isString()" }
+        },
+        "silenced": {
+          ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+          ".validate": "newData.isBoolean()"
+        },
+        "ov": {
+          ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+          "fan":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "mist":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "valve": { ".validate": "newData.isString() && (newData.val() === 'OPEN' || newData.val() === 'CLOSED')" },
+          "$other": { ".validate": false }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+    "devices": { ".read": false, ".write": false },
+    "admins":  { ".read": "auth != null", ".write": false }
+  }
+}

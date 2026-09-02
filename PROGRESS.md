@@ -50,8 +50,11 @@ behind a TLS handshake because it never makes one.
 - `firebase/storage.rules` — signed-in devices may write `frames/<zone>/`, capped
   at 2 MB and `image/jpeg`. Reads still require auth; `clips/` and everything
   else still deny.
-- `firebase/database.rules.snippet.json` — adds `camIp`, `frame` (device-writable)
-  and `camModel` (admin-only). Still a snippet to merge into the web repo.
+- `firebase/database.rules.json` — the full ruleset, deployed from this repo.
+  Adds `camIp` and `frame` (device-writable, same condition as `ts` and `rssi`)
+  and `camModel` (admin-only). **The web repo holds its own copy of this file.**
+  A `firebase deploy --only database` from there would revert the camera. Keep
+  the two in step, or delete the copy in the web repo.
 
 **App**
 - `backend.js` forwards `camIp`.
@@ -72,25 +75,21 @@ behind a TLS handshake because it never makes one.
    console, signed in as an admin — e.g. `ESP32-CAM OV2640`. It is admin-only by
    design and the camera cannot write it. **Until it exists the camera tile does
    not render at all**, because `hasCam(z)` tests `z.camModel`.
-2. **Merge the RTDB snippet** into `database.rules.json` in the web repo and
-   deploy from there. Until then every camera write is rejected by
-   `"$other": {".validate": false}`.
-3. **Deploy the Storage rules**: `firebase deploy --only storage`.
-4. **Give the ESP32-CAM a static DHCP lease** matching the address pinned in
+2. **Give the ESP32-CAM a static DHCP lease** matching the address pinned in
    `android/app/src/main/res/xml/network_security_config.xml` (currently
    `192.168.1.50`). Android's network security config cannot express a CIDR
    range, so the address is pinned rather than the subnet.
-5. **Tune the flame thresholds** in `fuse_cam.ino` — `FLAME_R_MIN`,
+3. **Tune the flame thresholds** in `fuse_cam.ino` — `FLAME_R_MIN`,
    `FLAME_RG_DIFF`, `FLAME_GB_DIFF`, `FLAME_PIXEL_RATIO`. The committed values
    are untested starting points. Watch the `FUSE-CAM: verdict` serial lines
    against a real flame and real room lighting; `FLAME_PIXEL_RATIO` is the one
    that governs false positives.
-6. **Check the RGB565 byte order** on your board. `detectFlame()` reads
+4. **Check the RGB565 byte order** on your board. `detectFlame()` reads
    big-endian. If detection behaves as though red and blue are swapped, swap the
    two indices in that one line.
-7. **Rebuild and install the APK**: `npx cap sync android`, then
+5. **Rebuild and install the APK**: `npx cap sync android`, then
    `./gradlew assembleDebug` with JDK 21.
-8. **Back up the release keystore** — `android/fuse-release.jks` and
+6. **Back up the release keystore** — `android/fuse-release.jks` and
    `android/keystore.properties`, both untracked and on this machine only.
 
 ---
@@ -127,8 +126,9 @@ turns a clear failure into random reboots.
 ## Handy commands
 
 ```bash
-# Redeploy Storage rules after editing firebase/storage.rules (run from repo root)
+# Redeploy rules after editing them (run from repo root)
 firebase deploy --only storage
+firebase deploy --only database
 
 # Rebuild the APK after changing www/ (run from repo root)
 npm install
