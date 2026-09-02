@@ -63,6 +63,18 @@ behind a TLS handshake because it never makes one.
 - `capacitor.config.json` allows mixed content; `network_security_config.xml`
   permits cleartext to the camera's pinned address only.
 
+**Deployed / provisioned**
+- Storage rules and RTDB rules both released to `spendwise-dec03`.
+- `zones/Z-01/camModel` set to `ESP32-CAM OV2640`, so the tile will render.
+
+**Build**
+- `dist/fuse-debug.apk` rebuilt from these sources and verified to contain the
+  `camStream` code, the `camIp` forward and `res/xml/network_security_config.xml`.
+- **`dist/fuse-release.apk` is stale.** It predates every change here. The
+  release keystore (`android/fuse-release.jks`, `android/keystore.properties`)
+  is untracked and exists only on the original build machine, so the signed
+  build cannot be reproduced anywhere else. Rebuild it where the keystore lives.
+
 **Removed**
 - `pi/` and `INTEGRATION.md`. The Pi bridge, its service-account key and its
   systemd unit are gone.
@@ -71,25 +83,21 @@ behind a TLS handshake because it never makes one.
 
 ## Pending ⏳ (your side)
 
-1. **Set `camModel` once**, by hand, at `zones/Z-01/camModel` in the Firebase
-   console, signed in as an admin — e.g. `ESP32-CAM OV2640`. It is admin-only by
-   design and the camera cannot write it. **Until it exists the camera tile does
-   not render at all**, because `hasCam(z)` tests `z.camModel`.
-2. **Give the ESP32-CAM a static DHCP lease** matching the address pinned in
+1. **Give the ESP32-CAM a static DHCP lease** matching the address pinned in
    `android/app/src/main/res/xml/network_security_config.xml` (currently
-   `192.168.1.50`). Android's network security config cannot express a CIDR
+   `192.168.123.50`). Android's network security config cannot express a CIDR
    range, so the address is pinned rather than the subnet.
-3. **Tune the flame thresholds** in `fuse_cam.ino` — `FLAME_R_MIN`,
+2. **Tune the flame thresholds** in `fuse_cam.ino` — `FLAME_R_MIN`,
    `FLAME_RG_DIFF`, `FLAME_GB_DIFF`, `FLAME_PIXEL_RATIO`. The committed values
    are untested starting points. Watch the `FUSE-CAM: verdict` serial lines
    against a real flame and real room lighting; `FLAME_PIXEL_RATIO` is the one
    that governs false positives.
-4. **Check the RGB565 byte order** on your board. `detectFlame()` reads
+3. **Check the RGB565 byte order** on your board. `detectFlame()` reads
    big-endian. If detection behaves as though red and blue are swapped, swap the
    two indices in that one line.
-5. **Rebuild and install the APK**: `npx cap sync android`, then
+4. **Rebuild and install the APK**: `npx cap sync android`, then
    `./gradlew assembleDebug` with JDK 21.
-6. **Back up the release keystore** — `android/fuse-release.jks` and
+5. **Back up the release keystore** — `android/fuse-release.jks` and
    `android/keystore.properties`, both untracked and on this machine only.
 
 ---
